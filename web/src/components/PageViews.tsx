@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useOutletContext, useNavigate } from 'react-router-dom'
+import { useOutletContext, useNavigate, useSearchParams } from 'react-router-dom'
 import type { DashboardOutletContext } from '../layouts/DashboardOutletContext'
 import { jobsApi } from '../api/jobs'
 import type { Job } from '../api/jobs'
@@ -820,9 +820,12 @@ export function CandidatesView() {
   )
 }
 
+const INTERVIEW_KIT_PARAM = 'kit'
+
 export function InterviewsView() {
   const { token } = useOutletContext<DashboardOutletContext>()
   const toast = useToast()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [assignments, setAssignments] = useState<InterviewAssignmentRow[]>([])
   const [jobs, setJobs] = useState<Job[]>([])
   const [loading, setLoading] = useState(true)
@@ -832,6 +835,21 @@ export function InterviewsView() {
   const [scoreRec, setScoreRec] = useState('yes')
   const [scoreNotes, setScoreNotes] = useState('')
   const [scoreSaving, setScoreSaving] = useState(false)
+
+  const syncKitParam = useCallback(
+    (id: number | null) => {
+      setSearchParams(
+        prev => {
+          const next = new URLSearchParams(prev)
+          if (id == null) next.delete(INTERVIEW_KIT_PARAM)
+          else next.set(INTERVIEW_KIT_PARAM, String(id))
+          return next
+        },
+        { replace: true },
+      )
+    },
+    [setSearchParams],
+  )
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -852,27 +870,77 @@ export function InterviewsView() {
 
   const jobTitle = (jobId: number) => jobs.find(j => j.id === jobId)?.title ?? `Job #${jobId}`
 
-  const closeKit = () => {
+  const loadKitForRow = useCallback(
+    async (row: InterviewAssignmentRow) => {
+      setKitOpenId(row.id)
+      setKitPayload(null)
+      setKitLoading(true)
+      setScoreRec('yes')
+      setScoreNotes('')
+      try {
+        const data = await interviewsApi.getKit(token, row.id)
+        setKitPayload(data)
+      } catch (e: unknown) {
+        toast.error('Could not load kit', e instanceof Error ? e.message : 'Error')
+        setKitOpenId(null)
+        setKitPayload(null)
+        syncKitParam(null)
+      } finally {
+        setKitLoading(false)
+      }
+    },
+    [token, toast, syncKitParam],
+  )
+
+  const closeKit = useCallback(() => {
     setKitOpenId(null)
     setKitPayload(null)
-  }
+    syncKitParam(null)
+  }, [syncKitParam])
 
-  const openKit = async (row: InterviewAssignmentRow) => {
-    setKitOpenId(row.id)
-    setKitPayload(null)
-    setKitLoading(true)
-    setScoreRec('yes')
-    setScoreNotes('')
-    try {
-      const data = await interviewsApi.getKit(token, row.id)
-      setKitPayload(data)
-    } catch (e: unknown) {
-      toast.error('Could not load kit', e instanceof Error ? e.message : 'Error')
-      closeKit()
-    } finally {
-      setKitLoading(false)
+  const openKit = useCallback(
+    (row: InterviewAssignmentRow) => {
+      syncKitParam(row.id)
+      void loadKitForRow(row)
+    },
+    [syncKitParam, loadKitForRow],
+  )
+
+  const kitQuery = searchParams.get(INTERVIEW_KIT_PARAM)
+
+  useEffect(() => {
+    if (loading) return
+    const raw = kitQuery
+    if (!raw) {
+      if (kitOpenId !== null || kitPayload !== null) {
+        setKitOpenId(null)
+        setKitPayload(null)
+        setKitLoading(false)
+      }
+      return
     }
-  }
+    const id = Number(raw)
+    if (Number.isNaN(id)) {
+      syncKitParam(null)
+      return
+    }
+    const row = assignments.find(a => a.id === id)
+    if (!row) {
+      if (assignments.length > 0) syncKitParam(null)
+      return
+    }
+    if (kitOpenId === id && (kitLoading || (kitPayload && kitPayload.assignment.id === id))) return
+    void loadKitForRow(row)
+  }, [
+    loading,
+    kitQuery,
+    assignments,
+    kitOpenId,
+    kitPayload,
+    kitLoading,
+    syncKitParam,
+    loadKitForRow,
+  ])
 
   const submitScore = async () => {
     if (!kitPayload) return

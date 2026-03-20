@@ -26,7 +26,10 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserData | null>(null)
-  const [loading, setLoading] = useState(false)
+  /** True on first paint when a token exists so RequireAuth waits for profile instead of bouncing to /login. */
+  const [loading, setLoading] = useState(
+    () => typeof window !== 'undefined' && !!localStorage.getItem(ACCESS_KEY),
+  )
   const [error, setError] = useState<string | null>(null)
 
   const getToken = useCallback(() => localStorage.getItem(ACCESS_KEY), [])
@@ -68,6 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem(ACCESS_KEY)
     localStorage.removeItem(REFRESH_KEY)
     setUser(null)
+    setLoading(false)
   }, [])
 
   useEffect(() => {

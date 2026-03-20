@@ -114,12 +114,22 @@ const ICONS: Record<string, ReactNode> = {
   ),
 }
 
+const SIDEBAR_COLLAPSED_KEY = 'forge.sidebarCollapsed'
+
+function readSidebarCollapsed(): boolean {
+  try {
+    return sessionStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
 interface Props {
   accountId: string
 }
 
 export default function Sidebar({ accountId }: Props) {
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useState(readSidebarCollapsed)
 
   const groups = NAV.reduce<Record<string, NavItem[]>>((acc, item) => {
     const g = item.group ?? 'Other'
@@ -134,7 +144,17 @@ export default function Sidebar({ accountId }: Props) {
     <aside className={`sidebar ${collapsed ? 'sidebar-collapsed' : ''}`}>
       <button
         className="sidebar-toggle"
-        onClick={() => setCollapsed(c => !c)}
+        onClick={() =>
+          setCollapsed(c => {
+            const next = !c
+            try {
+              sessionStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? '1' : '0')
+            } catch {
+              /* ignore quota / private mode */
+            }
+            return next
+          })
+        }
         aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         title={collapsed ? 'Expand' : 'Collapse'}
       >

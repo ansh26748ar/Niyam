@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useNavigate, useOutletContext, useParams, useLocation } from 'react-router-dom'
+import { useNavigate, useOutletContext, useParams, useLocation, useSearchParams } from 'react-router-dom'
 import { jobsApi, type Job } from '../api/jobs'
 import { pipelineStagesApi, type PipelineStage } from '../api/pipelineStages'
 import { interviewPlansApi, type InterviewPlan } from '../api/interviewPlans'
@@ -8,6 +8,16 @@ import type { DashboardOutletContext } from '../layouts/DashboardOutletContext'
 import RichTextEditor from '../components/RichTextEditor'
 
 type JobStepId = 'basics' | 'description' | 'interview'
+
+/** Synced to the URL so refresh / deep links keep the active wizard step. */
+const JOB_EDITOR_STEP_PARAM = 'step'
+
+function stepIndexFromSearch(visible: readonly { id: JobStepId }[], raw: string | null): number {
+  if (!raw) return 0
+  const id = raw as JobStepId
+  if (!visible.some(s => s.id === id)) return 0
+  return visible.findIndex(s => s.id === id)
+}
 
 const STEP_DEFS: {
   id: JobStepId
@@ -350,7 +360,8 @@ function InterviewPanelSection({ token, jobId }: { token: string; jobId: number 
 export default function JobEditorPage() {
   const { token, accountId } = useOutletContext<DashboardOutletContext>()
   const navigate = useNavigate()
-  const { pathname, state: locationState } = useLocation()
+  const { pathname } = useLocation()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { jobId: jobIdParam } = useParams<{ jobId: string }>()
   const toast = useToast()
 
@@ -371,7 +382,6 @@ export default function JobEditorPage() {
   })
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
-  const [stepIndex, setStepIndex] = useState(0)
 
   const jobsBase = `/account/${accountId}/jobs`
   const numericId = isNew ? null : editJobId
@@ -382,17 +392,27 @@ export default function JobEditorPage() {
     [hasInterviewStep],
   )
 
-  useEffect(() => {
-    setStepIndex(i => (i >= visibleSteps.length ? Math.max(0, visibleSteps.length - 1) : i))
-  }, [visibleSteps.length])
+  const stepParamRaw = searchParams.get(JOB_EDITOR_STEP_PARAM)
+  const stepIndex = useMemo(
+    () => stepIndexFromSearch(visibleSteps, stepParamRaw),
+    [visibleSteps, stepParamRaw],
+  )
 
+  /** Keep the query param valid (e.g. `interview` on /new → `basics`) and default missing → `basics`. */
   useEffect(() => {
-    const want = (locationState as { jobEditorInitialStep?: JobStepId } | null)?.jobEditorInitialStep
-    if (!want || !hasInterviewStep) return
-    const idx = STEP_DEFS.findIndex(s => s.id === want)
-    if (idx >= 0) setStepIndex(idx)
-    navigate(pathname, { replace: true, state: null })
-  }, [hasInterviewStep, locationState, navigate, pathname])
+    const canonicalId = visibleSteps[stepIndex]?.id
+    if (!canonicalId) return
+    if (stepParamRaw !== canonicalId) {
+      setSearchParams(
+        prev => {
+          const next = new URLSearchParams(prev)
+          next.set(JOB_EDITOR_STEP_PARAM, canonicalId)
+          return next
+        },
+        { replace: true },
+      )
+    }
+  }, [visibleSteps, stepIndex, stepParamRaw, setSearchParams])
 
   const currentStep = visibleSteps[stepIndex] ?? visibleSteps[0]
   const stepId = currentStep?.id ?? 'basics'
@@ -476,10 +496,7 @@ export default function JobEditorPage() {
           description: htmlHasText(form.descriptionHtml) ? form.descriptionHtml : undefined,
         })
         toast.success('Job created', `"${created.title}" — configure the interview panel next.`)
-        navigate(`${jobsBase}/${created.id}/edit`, {
-          replace: true,
-          state: { jobEditorInitialStep: 'interview' as const },
-        })
+        navigate(`${jobsBase}/${created.id}/edit?${JOB_EDITOR_STEP_PARAM}=interview`, { replace: true })
         return
       }
       await jobsApi.update(token, editJobId, {
@@ -505,17 +522,23 @@ export default function JobEditorPage() {
     }
   }
 
-  const goStep = (delta: number) => {
-    setStepIndex(i => {
-      const next = i + delta
-      if (next < 0 || next >= visibleSteps.length) return i
-      return next
-    })
-  }
-
   const goToStepIndex = (idx: number) => {
     if (idx < 0 || idx >= visibleSteps.length) return
-    setStepIndex(idx)
+    const id = visibleSteps[idx]?.id
+    if (!id) return
+    setSearchParams(
+      prev => {
+        const next = new URLSearchParams(prev)
+        next.set(JOB_EDITOR_STEP_PARAM, id)
+        return next
+      },
+      { replace: true },
+    )
+  }
+
+  const goStep = (delta: number) => {
+    const next = stepIndex + delta
+    goToStepIndex(next)
   }
 
   if (!isNew && (Number.isNaN(editJobId) || editJobId <= 0)) {
