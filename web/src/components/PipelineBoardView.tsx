@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useOutletContext } from 'react-router-dom'
+import { useOutletContext, useSearchParams } from 'react-router-dom'
 import type { DashboardOutletContext } from '../layouts/DashboardOutletContext'
 import {
   DndContext,
@@ -89,6 +89,29 @@ const STAGE_TAG: Record<string, string> = {
 }
 
 const STATUS_OPTIONS = ['all', 'applied', 'screening', 'interview', 'offer', 'hired', 'rejected', 'withdrawn'] as const
+
+const PIPE_PARAM_JOB = 'job'
+const PIPE_PARAM_Q = 'q'
+const PIPE_PARAM_STATUS = 'status'
+const PIPE_PARAM_SOURCE = 'source'
+
+function parsePipelineJobId(searchParams: URLSearchParams): number | '' {
+  const raw = searchParams.get(PIPE_PARAM_JOB)
+  if (!raw || !/^\d+$/.test(raw)) return ''
+  return Number(raw)
+}
+
+function pipelineStatusFromUrl(searchParams: URLSearchParams): string {
+  const s = searchParams.get(PIPE_PARAM_STATUS)
+  if (s && (STATUS_OPTIONS as readonly string[]).includes(s)) return s
+  return 'all'
+}
+
+function pipelineSourceFromUrl(searchParams: URLSearchParams, allowed: string[]): string {
+  const s = searchParams.get(PIPE_PARAM_SOURCE)
+  if (s && allowed.includes(s)) return s
+  return 'all'
+}
 
 function KanbanCard({ app }: { app: Application }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
@@ -357,17 +380,49 @@ function useApplicationFilters(apps: Application[], search: string, status: stri
 export default function PipelineBoardView() {
   const { token } = useOutletContext<DashboardOutletContext>()
   const toast = useToast()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [jobs, setJobs] = useState<Job[]>([])
-  const [jobId, setJobId] = useState<number | ''>('')
   const [stages, setStages] = useState<PipelineStage[]>([])
   const [apps, setApps] = useState<Application[]>([])
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState('')
   const [activeApp, setActiveApp] = useState<Application | null>(null)
   const [manageOpen, setManageOpen] = useState(false)
-  const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<string>('all')
-  const [sourceFilter, setSourceFilter] = useState<string>('all')
+
+  const patchPipelineQuery = useCallback(
+    (patch: Record<string, string | null | undefined>) => {
+      setSearchParams(
+        prev => {
+          const next = new URLSearchParams(prev)
+          for (const [k, v] of Object.entries(patch)) {
+            if (v === undefined) continue
+            if (v === null || v === '') {
+              next.delete(k)
+              continue
+            }
+            if ((k === PIPE_PARAM_STATUS || k === PIPE_PARAM_SOURCE) && v === 'all') {
+              next.delete(k)
+              continue
+            }
+            next.set(k, v)
+          }
+          return next
+        },
+        { replace: true },
+      )
+    },
+    [setSearchParams],
+  )
+
+  const jobId = parsePipelineJobId(searchParams)
+  const search = searchParams.get(PIPE_PARAM_Q) ?? ''
+  const sourceTypesList = useMemo(() => {
+    const set = new Set<string>()
+    for (const a of apps) set.add(a.source_type || 'direct')
+    return ['all', ...Array.from(set).sort()]
+  }, [apps])
+  const statusFilter = pipelineStatusFromUrl(searchParams)
+  const sourceFilter = pipelineSourceFromUrl(searchParams, sourceTypesList)
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -413,14 +468,16 @@ export default function PipelineBoardView() {
     loadJobData(jobId)
   }, [jobId, loadJobData])
 
+  useEffect(() => {
+    if (jobs.length === 0) return
+    if (typeof jobId !== 'number') return
+    if (!jobs.some(j => j.id === jobId)) {
+      patchPipelineQuery({ [PIPE_PARAM_JOB]: null })
+    }
+  }, [jobs, jobId, patchPipelineQuery])
+
   const filteredApps = useApplicationFilters(apps, search, statusFilter, sourceFilter)
   const filtersActive = search.trim() !== '' || statusFilter !== 'all' || sourceFilter !== 'all'
-
-  const sourceTypes = useMemo(() => {
-    const set = new Set<string>()
-    for (const a of apps) set.add(a.source_type || 'direct')
-    return ['all', ...Array.from(set).sort()]
-  }, [apps])
 
   const byColumn = useMemo(() => {
     const map = new Map<number | 'unassigned', Application[]>()
@@ -516,9 +573,11 @@ export default function PipelineBoardView() {
   const selectedJob = typeof jobId === 'number' ? jobs.find(j => j.id === jobId) : undefined
 
   const clearFilters = () => {
-    setSearch('')
-    setStatusFilter('all')
-    setSourceFilter('all')
+    patchPipelineQuery({
+      [PIPE_PARAM_Q]: null,
+      [PIPE_PARAM_STATUS]: null,
+      [PIPE_PARAM_SOURCE]: null,
+    })
   }
 
   const accentForStage = (i: number) => {
@@ -569,7 +628,11 @@ export default function PipelineBoardView() {
               <select
                 id="pipeline-job"
                 value={typeof jobId === 'number' ? String(jobId) : ''}
-                onChange={e => setJobId(e.target.value ? Number(e.target.value) : '')}
+                onChange={e =>
+                  patchPipelineQuery({
+                    [PIPE_PARAM_JOB]: e.target.value || null,
+                  })
+                }
               >
                 <option value="">Select a job…</option>
                 {jobs.map(j => (
@@ -606,11 +669,16 @@ export default function PipelineBoardView() {
                   className="pipeline-search-input"
                   placeholder="Search name or email…"
                   value={search}
-                  onChange={e => setSearch(e.target.value)}
+                  onChange={e => patchPipelineQuery({ [PIPE_PARAM_Q]: e.target.value || null })}
                   aria-label="Search candidates"
                 />
                 {search && (
-                  <button type="button" className="pipeline-search-clear" onClick={() => setSearch('')} aria-label="Clear search">
+                  <button
+                    type="button"
+                    className="pipeline-search-clear"
+                    onClick={() => patchPipelineQuery({ [PIPE_PARAM_Q]: null })}
+                    aria-label="Clear search"
+                  >
                     ×
                   </button>
                 )}
@@ -619,7 +687,16 @@ export default function PipelineBoardView() {
                 <label htmlFor="pipe-status" className="pipeline-filter-label">
                   Status
                 </label>
-                <select id="pipe-status" className="pipeline-filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+                <select
+                  id="pipe-status"
+                  className="pipeline-filter-select"
+                  value={statusFilter}
+                  onChange={e =>
+                    patchPipelineQuery({
+                      [PIPE_PARAM_STATUS]: e.target.value === 'all' ? null : e.target.value,
+                    })
+                  }
+                >
                   {STATUS_OPTIONS.map(s => (
                     <option key={s} value={s}>
                       {s === 'all' ? 'All statuses' : s}
@@ -631,8 +708,17 @@ export default function PipelineBoardView() {
                 <label htmlFor="pipe-source" className="pipeline-filter-label">
                   Source
                 </label>
-                <select id="pipe-source" className="pipeline-filter-select" value={sourceFilter} onChange={e => setSourceFilter(e.target.value)}>
-                  {sourceTypes.map(s => (
+                <select
+                  id="pipe-source"
+                  className="pipeline-filter-select"
+                  value={sourceFilter}
+                  onChange={e =>
+                    patchPipelineQuery({
+                      [PIPE_PARAM_SOURCE]: e.target.value === 'all' ? null : e.target.value,
+                    })
+                  }
+                >
+                  {sourceTypesList.map(s => (
                     <option key={s} value={s}>
                       {s === 'all' ? 'All sources' : s}
                     </option>
