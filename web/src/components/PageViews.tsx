@@ -9,6 +9,7 @@ import { postingsApi } from '../api/postings'
 import type { JobPosting } from '../api/postings'
 import { applicationsApi } from '../api/applications'
 import type { Application } from '../api/applications'
+import { useToast } from '../contexts/ToastContext'
 
 // ── Shared UI primitives ───────────────────────────────────────────
 
@@ -63,18 +64,59 @@ function ListHeader({ title, count, onAction, actionLabel = '+ New' }: { title: 
 }
 
 function LoadingRow() {
-  return <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>Loading…</div>
+  return (
+    <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+      <div className="spinner" style={{ margin: '0 auto 8px', width: 24, height: 24 }} />
+      Loading...
+    </div>
+  )
 }
 
 function ErrorRow({ msg }: { msg: string }) {
-  return <div style={{ padding: '16px', color: 'var(--error)', fontSize: 12 }}>{msg}</div>
+  return <div style={{ padding: '16px 20px', color: 'var(--error)', fontSize: 13, background: 'var(--error-bg)', borderBottom: '1px solid var(--error-border)' }}>{msg}</div>
+}
+
+function EmptyRow({ text }: { text: string }) {
+  return (
+    <div style={{ padding: '48px 24px', textAlign: 'center' }}>
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--gray-300)" strokeWidth="1.5" style={{ marginBottom: 12 }}>
+        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z" />
+        <path d="M14 2v6h6M12 18v-6M9 15h6" />
+      </svg>
+      <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>{text}</div>
+    </div>
+  )
 }
 
 const STAGE_COLORS: Record<string, string> = {
   applied: 'tag-blue', screening: 'tag-orange', interview: 'tag-blue',
-  offer: 'tag-green', hired: 'tag-green', rejected: 'tag-gray', withdrawn: 'tag-gray',
+  offer: 'tag-green', hired: 'tag-green', rejected: 'tag-red', withdrawn: 'tag-gray',
   draft: 'tag-gray', open: 'tag-green', closed: 'tag-gray', paused: 'tag-orange',
   pending: 'tag-orange', posted: 'tag-green', failed: 'tag-red',
+}
+
+// ── Confirm Dialog ──────────────────────────────────────────────────
+
+function ConfirmDialog({ title, message, onConfirm, onCancel }: {
+  title: string; message: string; onConfirm: () => void; onCancel: () => void
+}) {
+  return (
+    <div className="confirm-overlay" onClick={onCancel}>
+      <div className="confirm-dialog" onClick={e => e.stopPropagation()}>
+        <div className="confirm-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+          </svg>
+        </div>
+        <div className="confirm-title">{title}</div>
+        <div className="confirm-message">{message}</div>
+        <div className="confirm-actions">
+          <button className="btn-confirm-cancel" onClick={onCancel}>Cancel</button>
+          <button className="btn-confirm-danger" onClick={onConfirm}>Confirm</button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 // ── Modal shell ────────────────────────────────────────────────────
@@ -85,7 +127,11 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
       <div className="modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <span className="modal-title">{title}</span>
-          <button className="modal-close" onClick={onClose}>✕</button>
+          <button className="modal-close" onClick={onClose} aria-label="Close">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+              <path d="M4 4l8 8M12 4l-8 8" />
+            </svg>
+          </button>
         </div>
         <div className="modal-body">{children}</div>
       </div>
@@ -116,7 +162,7 @@ function ProfileView({ user }: { user: UserData }) {
         <div className="stat-cell"><div className="stat-value">{user.account ? '1' : '0'}</div><div className="stat-label">Accounts</div></div>
         <div className="stat-cell"><div className="stat-value">{user.role ? '1' : '0'}</div><div className="stat-label">Roles</div></div>
         <div className="stat-cell"><div className={`stat-value ${user.status !== 'active' ? 'muted' : ''}`}>{user.status === 'active' ? '✓' : '✗'}</div><div className="stat-label">Active</div></div>
-        <div className="stat-cell"><div className="stat-value" style={{ fontSize: 13, paddingTop: 4 }}>{new Date(user.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</div><div className="stat-label">Member Since</div></div>
+        <div className="stat-cell"><div className="stat-value" style={{ fontSize: 14, paddingTop: 4 }}>{new Date(user.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</div><div className="stat-label">Member Since</div></div>
       </div>
       <div className="panels-grid">
         <Panel icon="building" title="Account">
@@ -142,6 +188,7 @@ function ProfileView({ user }: { user: UserData }) {
 // ── Jobs view ──────────────────────────────────────────────────────
 
 function JobForm({ token, job, onSave, onClose }: { token: string; job?: Job; onSave: () => void; onClose: () => void }) {
+  const toast = useToast()
   const [form, setForm] = useState({
     title: job?.title ?? '',
     department: job?.department ?? '',
@@ -161,12 +208,16 @@ function JobForm({ token, job, onSave, onClose }: { token: string; job?: Job; on
     try {
       if (job) {
         await jobsApi.update(token, job.id, form)
+        toast.success('Job updated', `"${form.title}" has been updated successfully.`)
       } else {
         await jobsApi.create(token, form)
+        toast.success('Job created', `"${form.title}" has been created successfully.`)
       }
       onSave()
     } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : 'Failed to save')
+      const msg = e instanceof Error ? e.message : 'Failed to save'
+      setErr(msg)
+      toast.error('Failed to save job', msg)
     } finally {
       setSaving(false)
     }
@@ -178,7 +229,7 @@ function JobForm({ token, job, onSave, onClose }: { token: string; job?: Job; on
       <FormField label="Job Title *"><input value={form.title} onChange={e => set('title', e.target.value)} placeholder="e.g. Senior Engineer" /></FormField>
       <FormField label="Department"><input value={form.department} onChange={e => set('department', e.target.value)} placeholder="Engineering" /></FormField>
       <FormField label="Location"><input value={form.location} onChange={e => set('location', e.target.value)} placeholder="San Francisco, CA" /></FormField>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         <FormField label="Location Type">
           <select value={form.location_type} onChange={e => set('location_type', e.target.value)}>
             <option value="onsite">On-site</option>
@@ -203,18 +254,20 @@ function JobForm({ token, job, onSave, onClose }: { token: string; job?: Job; on
           <option value="closed">Closed</option>
         </select>
       </FormField>
-      {!job && <FormField label="Description"><textarea value={form.description} onChange={e => set('description', e.target.value)} placeholder="Job description…" rows={4} style={{ width: '100%', resize: 'vertical', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 3, fontFamily: 'inherit', fontSize: 13 }} /></FormField>}
-      <button className="btn-primary" onClick={submit} disabled={saving}>{saving ? 'Saving…' : job ? 'Update Job' : 'Create Job'}</button>
+      {!job && <FormField label="Description"><textarea value={form.description} onChange={e => set('description', e.target.value)} placeholder="Job description..." rows={4} /></FormField>}
+      <button className="btn-primary" onClick={submit} disabled={saving}>{saving ? 'Saving...' : job ? 'Update Job' : 'Create Job'}</button>
     </Modal>
   )
 }
 
 function JobsView({ token }: { token: string }) {
+  const toast = useToast()
   const [jobs, setJobs] = useState<Job[]>([])
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Job | undefined>()
+  const [confirmDelete, setConfirmDelete] = useState<Job | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true); setErr('')
@@ -223,13 +276,27 @@ function JobsView({ token }: { token: string }) {
 
   useEffect(() => { load() }, [load])
 
-  const del = async (id: number) => {
-    if (!confirm('Delete this job?')) return
-    try { await jobsApi.delete(token, id); load() } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Failed') }
+  const del = async (job: Job) => {
+    try {
+      await jobsApi.delete(token, job.id)
+      toast.success('Job deleted', `"${job.title}" has been removed.`)
+      load()
+    } catch (e: unknown) {
+      toast.error('Delete failed', e instanceof Error ? e.message : 'Failed to delete job')
+    }
+    setConfirmDelete(null)
   }
 
   return (
     <>
+      {confirmDelete && (
+        <ConfirmDialog
+          title="Delete Job"
+          message={`Are you sure you want to delete "${confirmDelete.title}"? This action cannot be undone.`}
+          onConfirm={() => del(confirmDelete)}
+          onCancel={() => setConfirmDelete(null)}
+        />
+      )}
       {(showForm || editing) && <JobForm token={token} job={editing} onSave={() => { setShowForm(false); setEditing(undefined); load() }} onClose={() => { setShowForm(false); setEditing(undefined) }} />}
       <ListHeader title="Jobs" count={jobs.length} onAction={() => setShowForm(true)} actionLabel="+ New Job" />
       <div className="list-table">
@@ -242,16 +309,16 @@ function JobsView({ token }: { token: string }) {
         </div>
         {loading && <LoadingRow />}
         {err && <ErrorRow msg={err} />}
-        {!loading && !err && jobs.length === 0 && <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>No jobs yet. Create your first job.</div>}
+        {!loading && !err && jobs.length === 0 && <EmptyRow text="No jobs yet. Create your first job to get started." />}
         {jobs.map(j => (
           <div key={j.id} className="list-row">
-            <div className="list-col list-col-main"><div className="list-row-name">{j.title}</div><div className="list-row-sub">{j.slug}</div></div>
+            <div className="list-col list-col-main"><div><div className="list-row-name">{j.title}</div><div className="list-row-sub">{j.slug}</div></div></div>
             <div className="list-col list-row-sub">{j.department || '—'}</div>
             <div className="list-col list-row-sub">{j.location || '—'}</div>
             <div className="list-col"><span className={`tag ${STAGE_COLORS[j.status] ?? 'tag-gray'}`}>{j.status}</span></div>
             <div className="list-col" style={{ display: 'flex', gap: 6 }}>
               <button className="btn-row-action" onClick={() => setEditing(j)}>Edit</button>
-              <button className="btn-row-action btn-row-danger" onClick={() => del(j.id)}>Del</button>
+              <button className="btn-row-action btn-row-danger" onClick={() => setConfirmDelete(j)}>Delete</button>
             </div>
           </div>
         ))}
@@ -263,6 +330,7 @@ function JobsView({ token }: { token: string }) {
 // ── Job Boards view ────────────────────────────────────────────────
 
 function BoardForm({ token, board, onSave, onClose }: { token: string; board?: JobBoard; onSave: () => void; onClose: () => void }) {
+  const toast = useToast()
   const [form, setForm] = useState({
     name: board?.name ?? '',
     website_url: board?.website_url ?? '',
@@ -277,10 +345,19 @@ function BoardForm({ token, board, onSave, onClose }: { token: string; board?: J
   const submit = async () => {
     setSaving(true); setErr('')
     try {
-      if (board) { await boardsApi.update(token, board.id, form) }
-      else { await boardsApi.create(token, form) }
+      if (board) {
+        await boardsApi.update(token, board.id, form)
+        toast.success('Board updated', `"${form.name}" has been updated.`)
+      } else {
+        await boardsApi.create(token, form)
+        toast.success('Board created', `"${form.name}" has been added.`)
+      }
       onSave()
-    } catch (e: unknown) { setErr(e instanceof Error ? e.message : 'Failed') } finally { setSaving(false) }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Failed'
+      setErr(msg)
+      toast.error('Save failed', msg)
+    } finally { setSaving(false) }
   }
 
   return (
@@ -296,25 +373,27 @@ function BoardForm({ token, board, onSave, onClose }: { token: string; board?: J
           <option value="email">Email</option>
         </select>
       </FormField>
-      <div style={{ display: 'flex', gap: 16, marginBottom: 14 }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer' }}>
-          <input type="checkbox" checked={form.is_active} onChange={e => set('is_active', e.target.checked)} /> Active
+      <div style={{ display: 'flex', gap: 20, marginBottom: 16 }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', color: 'var(--text-secondary)' }}>
+          <input type="checkbox" checked={form.is_active} onChange={e => set('is_active', e.target.checked)} style={{ width: 16, height: 16, accentColor: 'var(--teal)' }} /> Active
         </label>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer' }}>
-          <input type="checkbox" checked={form.is_premium} onChange={e => set('is_premium', e.target.checked)} /> Premium
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', color: 'var(--text-secondary)' }}>
+          <input type="checkbox" checked={form.is_premium} onChange={e => set('is_premium', e.target.checked)} style={{ width: 16, height: 16, accentColor: 'var(--teal)' }} /> Premium
         </label>
       </div>
-      <button className="btn-primary" onClick={submit} disabled={saving}>{saving ? 'Saving…' : board ? 'Update Board' : 'Create Board'}</button>
+      <button className="btn-primary" onClick={submit} disabled={saving}>{saving ? 'Saving...' : board ? 'Update Board' : 'Create Board'}</button>
     </Modal>
   )
 }
 
 function JobBoardsView({ token }: { token: string }) {
+  const toast = useToast()
   const [boards, setBoards] = useState<JobBoard[]>([])
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<JobBoard | undefined>()
+  const [confirmDelete, setConfirmDelete] = useState<JobBoard | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true); setErr('')
@@ -323,13 +402,27 @@ function JobBoardsView({ token }: { token: string }) {
 
   useEffect(() => { load() }, [load])
 
-  const del = async (id: number) => {
-    if (!confirm('Delete this board?')) return
-    try { await boardsApi.delete(token, id); load() } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Failed') }
+  const del = async (board: JobBoard) => {
+    try {
+      await boardsApi.delete(token, board.id)
+      toast.success('Board deleted', `"${board.name}" has been removed.`)
+      load()
+    } catch (e: unknown) {
+      toast.error('Delete failed', e instanceof Error ? e.message : 'Failed')
+    }
+    setConfirmDelete(null)
   }
 
   return (
     <>
+      {confirmDelete && (
+        <ConfirmDialog
+          title="Delete Board"
+          message={`Are you sure you want to delete "${confirmDelete.name}"? This action cannot be undone.`}
+          onConfirm={() => del(confirmDelete)}
+          onCancel={() => setConfirmDelete(null)}
+        />
+      )}
       {(showForm || editing) && <BoardForm token={token} board={editing} onSave={() => { setShowForm(false); setEditing(undefined); load() }} onClose={() => { setShowForm(false); setEditing(undefined) }} />}
       <ListHeader title="Job Boards" count={boards.length} onAction={() => setShowForm(true)} actionLabel="+ New Board" />
       <div className="list-table">
@@ -341,21 +434,20 @@ function JobBoardsView({ token }: { token: string }) {
         </div>
         {loading && <LoadingRow />}
         {err && <ErrorRow msg={err} />}
-        {!loading && !err && boards.length === 0 && <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>No boards yet.</div>}
+        {!loading && !err && boards.length === 0 && <EmptyRow text="No boards yet. Add your first job board." />}
         {boards.map(b => (
           <div key={b.id} className="list-row">
             <div className="list-col list-col-main">
-              <div className="list-row-name">{b.name}</div>
-              <div className="list-row-sub">{b.website_url || b.slug}</div>
+              <div><div className="list-row-name">{b.name}</div><div className="list-row-sub">{b.website_url || b.slug}</div></div>
             </div>
             <div className="list-col list-row-sub">{b.integration_type}</div>
             <div className="list-col">
               <span className={`tag ${b.is_active ? 'tag-green' : 'tag-gray'}`}>{b.is_active ? 'Active' : 'Inactive'}</span>
-              {b.is_premium && <span className="tag tag-orange" style={{ marginLeft: 4 }}>Premium</span>}
+              {b.is_premium && <span className="tag tag-orange" style={{ marginLeft: 6 }}>Premium</span>}
             </div>
             <div className="list-col" style={{ display: 'flex', gap: 6 }}>
               <button className="btn-row-action" onClick={() => setEditing(b)}>Edit</button>
-              <button className="btn-row-action btn-row-danger" onClick={() => del(b.id)}>Del</button>
+              <button className="btn-row-action btn-row-danger" onClick={() => setConfirmDelete(b)}>Delete</button>
             </div>
           </div>
         ))}
@@ -367,6 +459,7 @@ function JobBoardsView({ token }: { token: string }) {
 // ── Postings view ──────────────────────────────────────────────────
 
 function PostingForm({ token, onSave, onClose }: { token: string; onSave: () => void; onClose: () => void }) {
+  const toast = useToast()
   const [jobs, setJobs] = useState<import('../api/jobs').Job[]>([])
   const [boards, setBoards] = useState<JobBoard[]>([])
   const [form, setForm] = useState({ job_id: '', board_id: '' })
@@ -384,8 +477,13 @@ function PostingForm({ token, onSave, onClose }: { token: string; onSave: () => 
     setSaving(true); setErr('')
     try {
       await postingsApi.create(token, { job_id: Number(form.job_id), board_id: Number(form.board_id) })
+      toast.success('Job posted', 'Your job has been posted to the board.')
       onSave()
-    } catch (e: unknown) { setErr(e instanceof Error ? e.message : 'Failed') } finally { setSaving(false) }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Failed'
+      setErr(msg)
+      toast.error('Posting failed', msg)
+    } finally { setSaving(false) }
   }
 
   return (
@@ -393,26 +491,28 @@ function PostingForm({ token, onSave, onClose }: { token: string; onSave: () => 
       {err && <div className="auth-error">{err}</div>}
       <FormField label="Job *">
         <select value={form.job_id} onChange={e => setForm(f => ({ ...f, job_id: e.target.value }))}>
-          <option value="">Select a job…</option>
+          <option value="">Select a job...</option>
           {jobs.map(j => <option key={j.id} value={j.id}>{j.title}</option>)}
         </select>
       </FormField>
       <FormField label="Job Board *">
         <select value={form.board_id} onChange={e => setForm(f => ({ ...f, board_id: e.target.value }))}>
-          <option value="">Select a board…</option>
+          <option value="">Select a board...</option>
           {boards.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
         </select>
       </FormField>
-      <button className="btn-primary" onClick={submit} disabled={saving}>{saving ? 'Posting…' : 'Post Job'}</button>
+      <button className="btn-primary" onClick={submit} disabled={saving}>{saving ? 'Posting...' : 'Post Job'}</button>
     </Modal>
   )
 }
 
 function PostingsView({ token }: { token: string }) {
+  const toast = useToast()
   const [postings, setPostings] = useState<JobPosting[]>([])
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
   const [showForm, setShowForm] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState<JobPosting | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true); setErr('')
@@ -421,13 +521,27 @@ function PostingsView({ token }: { token: string }) {
 
   useEffect(() => { load() }, [load])
 
-  const del = async (id: number) => {
-    if (!confirm('Remove this posting?')) return
-    try { await postingsApi.delete(token, id); load() } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Failed') }
+  const del = async (posting: JobPosting) => {
+    try {
+      await postingsApi.delete(token, posting.id)
+      toast.success('Posting removed', 'The job posting has been removed.')
+      load()
+    } catch (e: unknown) {
+      toast.error('Remove failed', e instanceof Error ? e.message : 'Failed')
+    }
+    setConfirmDelete(null)
   }
 
   return (
     <>
+      {confirmDelete && (
+        <ConfirmDialog
+          title="Remove Posting"
+          message="Are you sure you want to remove this posting? This action cannot be undone."
+          onConfirm={() => del(confirmDelete)}
+          onCancel={() => setConfirmDelete(null)}
+        />
+      )}
       {showForm && <PostingForm token={token} onSave={() => { setShowForm(false); load() }} onClose={() => setShowForm(false)} />}
       <ListHeader title="Job Postings" count={postings.length} onAction={() => setShowForm(true)} actionLabel="+ Post Job" />
       <div className="list-table">
@@ -440,7 +554,7 @@ function PostingsView({ token }: { token: string }) {
         </div>
         {loading && <LoadingRow />}
         {err && <ErrorRow msg={err} />}
-        {!loading && !err && postings.length === 0 && <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>No postings yet.</div>}
+        {!loading && !err && postings.length === 0 && <EmptyRow text="No postings yet. Post your first job to a board." />}
         {postings.map(p => (
           <div key={p.id} className="list-row">
             <div className="list-col list-col-main"><div className="list-row-name">Job #{p.job_id}</div></div>
@@ -448,7 +562,7 @@ function PostingsView({ token }: { token: string }) {
             <div className="list-col"><span className={`tag ${STAGE_COLORS[p.status] ?? 'tag-gray'}`}>{p.status}</span></div>
             <div className="list-col list-row-sub">{p.posted_at ? new Date(p.posted_at).toLocaleDateString() : '—'}</div>
             <div className="list-col">
-              <button className="btn-row-action btn-row-danger" onClick={() => del(p.id)}>Remove</button>
+              <button className="btn-row-action btn-row-danger" onClick={() => setConfirmDelete(p)}>Remove</button>
             </div>
           </div>
         ))}
@@ -460,6 +574,7 @@ function PostingsView({ token }: { token: string }) {
 // ── Applications view ──────────────────────────────────────────────
 
 function ApplicationForm({ token, onSave, onClose }: { token: string; onSave: () => void; onClose: () => void }) {
+  const toast = useToast()
   const [jobs, setJobs] = useState<import('../api/jobs').Job[]>([])
   const [form, setForm] = useState({ job_id: '', candidate_name: '', candidate_email: '', candidate_phone: '', cover_letter: '' })
   const [saving, setSaving] = useState(false)
@@ -475,8 +590,13 @@ function ApplicationForm({ token, onSave, onClose }: { token: string; onSave: ()
     setSaving(true); setErr('')
     try {
       await applicationsApi.create(token, { job_id: Number(form.job_id), candidate_email: form.candidate_email, candidate_name: form.candidate_name, candidate_phone: form.candidate_phone, cover_letter: form.cover_letter })
+      toast.success('Application submitted', `Application for ${form.candidate_name || form.candidate_email} has been created.`)
       onSave()
-    } catch (e: unknown) { setErr(e instanceof Error ? e.message : 'Failed') } finally { setSaving(false) }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Failed'
+      setErr(msg)
+      toast.error('Submission failed', msg)
+    } finally { setSaving(false) }
   }
 
   return (
@@ -484,15 +604,15 @@ function ApplicationForm({ token, onSave, onClose }: { token: string; onSave: ()
       {err && <div className="auth-error">{err}</div>}
       <FormField label="Job *">
         <select value={form.job_id} onChange={e => set('job_id', e.target.value)}>
-          <option value="">Select a job…</option>
+          <option value="">Select a job...</option>
           {jobs.map(j => <option key={j.id} value={j.id}>{j.title}</option>)}
         </select>
       </FormField>
       <FormField label="Candidate Name"><input value={form.candidate_name} onChange={e => set('candidate_name', e.target.value)} placeholder="Full name" /></FormField>
       <FormField label="Email *"><input type="email" value={form.candidate_email} onChange={e => set('candidate_email', e.target.value)} placeholder="candidate@email.com" /></FormField>
       <FormField label="Phone"><input value={form.candidate_phone} onChange={e => set('candidate_phone', e.target.value)} placeholder="+1 555 000 0000" /></FormField>
-      <FormField label="Cover Letter"><textarea value={form.cover_letter} onChange={e => set('cover_letter', e.target.value)} rows={3} placeholder="Optional cover letter…" style={{ width: '100%', resize: 'vertical', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 3, fontFamily: 'inherit', fontSize: 13 }} /></FormField>
-      <button className="btn-primary" onClick={submit} disabled={saving}>{saving ? 'Submitting…' : 'Submit Application'}</button>
+      <FormField label="Cover Letter"><textarea value={form.cover_letter} onChange={e => set('cover_letter', e.target.value)} rows={3} placeholder="Optional cover letter..." /></FormField>
+      <button className="btn-primary" onClick={submit} disabled={saving}>{saving ? 'Submitting...' : 'Submit Application'}</button>
     </Modal>
   )
 }
@@ -500,11 +620,13 @@ function ApplicationForm({ token, onSave, onClose }: { token: string; onSave: ()
 const STAGES = ['applied', 'screening', 'interview', 'offer', 'hired', 'rejected', 'withdrawn']
 
 function ApplicationsView({ token }: { token: string }) {
+  const toast = useToast()
   const [apps, setApps] = useState<Application[]>([])
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [stageTarget, setStageTarget] = useState<Application | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<Application | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true); setErr('')
@@ -514,23 +636,52 @@ function ApplicationsView({ token }: { token: string }) {
   useEffect(() => { load() }, [load])
 
   const moveStage = async (app: Application, status: string) => {
-    try { await applicationsApi.updateStage(token, app.id, status); load() } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Failed') }
+    try {
+      await applicationsApi.updateStage(token, app.id, status)
+      toast.success('Stage updated', `${app.candidate_name || app.candidate_email} moved to "${status}".`)
+      load()
+    } catch (e: unknown) {
+      toast.error('Stage update failed', e instanceof Error ? e.message : 'Failed')
+    }
     setStageTarget(null)
   }
 
-  const del = async (id: number) => {
-    if (!confirm('Archive this application?')) return
-    try { await applicationsApi.delete(token, id); load() } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Failed') }
+  const del = async (app: Application) => {
+    try {
+      await applicationsApi.delete(token, app.id)
+      toast.success('Application archived', `Application from ${app.candidate_name || app.candidate_email} has been archived.`)
+      load()
+    } catch (e: unknown) {
+      toast.error('Archive failed', e instanceof Error ? e.message : 'Failed')
+    }
+    setConfirmDelete(null)
   }
 
   return (
     <>
+      {confirmDelete && (
+        <ConfirmDialog
+          title="Archive Application"
+          message={`Are you sure you want to archive the application from "${confirmDelete.candidate_name || confirmDelete.candidate_email}"?`}
+          onConfirm={() => del(confirmDelete)}
+          onCancel={() => setConfirmDelete(null)}
+        />
+      )}
       {showForm && <ApplicationForm token={token} onSave={() => { setShowForm(false); load() }} onClose={() => setShowForm(false)} />}
       {stageTarget && (
         <Modal title={`Move: ${stageTarget.candidate_name || stageTarget.candidate_email}`} onClose={() => setStageTarget(null)}>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             {STAGES.map(s => (
-              <button key={s} className={`btn-action ${stageTarget.status === s ? '' : ''}`} style={{ background: stageTarget.status === s ? 'var(--navy)' : undefined }} onClick={() => moveStage(stageTarget, s)}>
+              <button
+                key={s}
+                className="btn-action"
+                style={{
+                  background: stageTarget.status === s ? 'var(--navy)' : undefined,
+                  opacity: stageTarget.status === s ? 0.5 : 1,
+                }}
+                onClick={() => moveStage(stageTarget, s)}
+                disabled={stageTarget.status === s}
+              >
                 {s}
               </button>
             ))}
@@ -548,7 +699,7 @@ function ApplicationsView({ token }: { token: string }) {
         </div>
         {loading && <LoadingRow />}
         {err && <ErrorRow msg={err} />}
-        {!loading && !err && apps.length === 0 && <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>No applications yet.</div>}
+        {!loading && !err && apps.length === 0 && <EmptyRow text="No applications yet. Add your first application." />}
         {apps.map(a => (
           <div key={a.id} className="list-row">
             <div className="list-col list-col-main">
@@ -560,7 +711,7 @@ function ApplicationsView({ token }: { token: string }) {
             <div className="list-col list-row-sub">{a.source_type}</div>
             <div className="list-col" style={{ display: 'flex', gap: 6 }}>
               <button className="btn-row-action" onClick={() => setStageTarget(a)}>Stage</button>
-              <button className="btn-row-action btn-row-danger" onClick={() => del(a.id)}>Del</button>
+              <button className="btn-row-action btn-row-danger" onClick={() => setConfirmDelete(a)}>Del</button>
             </div>
           </div>
         ))}
@@ -595,7 +746,7 @@ function CandidatesView({ token }: { token: string }) {
         </div>
         {loading && <LoadingRow />}
         {err && <ErrorRow msg={err} />}
-        {!loading && !err && apps.length === 0 && <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>No candidates yet.</div>}
+        {!loading && !err && apps.length === 0 && <EmptyRow text="No candidates yet." />}
         {apps.map(a => (
           <div key={a.id} className="list-row">
             <div className="list-col list-col-main">
@@ -634,7 +785,7 @@ function InterviewsView({ token }: { token: string }) {
           <div className="list-col">Applied</div>
         </div>
         {loading && <LoadingRow />}
-        {!loading && apps.length === 0 && <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>No interviews scheduled.</div>}
+        {!loading && apps.length === 0 && <EmptyRow text="No interviews scheduled." />}
         {apps.map(a => (
           <div key={a.id} className="list-row">
             <div className="list-col list-col-main">
@@ -654,8 +805,11 @@ function InterviewsView({ token }: { token: string }) {
 function TeamView() {
   return (
     <div className="empty-view">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--gray-300)" strokeWidth="1.5" style={{ marginBottom: 16 }}>
+        <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
+      </svg>
       <div className="empty-view-title">Team Members</div>
-      <div className="empty-view-sub">Invite teammates to collaborate on your workspace.</div>
+      <div className="empty-view-sub">Invite teammates to collaborate on your workspace. Manage roles and permissions from here.</div>
     </div>
   )
 }
@@ -663,8 +817,11 @@ function TeamView() {
 function SettingsView() {
   return (
     <div className="empty-view">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--gray-300)" strokeWidth="1.5" style={{ marginBottom: 16 }}>
+        <path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.49.49 0 00-.59-.22l-2.39.96a7.02 7.02 0 00-1.62-.94l-.36-2.54A.484.484 0 0014 2h-4a.484.484 0 00-.48.41l-.36 2.54a7.4 7.4 0 00-1.62.94l-2.39-.96a.48.48 0 00-.59.22L2.74 8.87a.47.47 0 00.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.47.47 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.36 1.04.67 1.62.94l.36 2.54c.05.24.27.41.48.41h4c.24 0 .44-.17.47-.41l.36-2.54a7.4 7.4 0 001.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.47.47 0 00-.12-.61l-2.01-1.58zM12 15.6a3.6 3.6 0 110-7.2 3.6 3.6 0 010 7.2z" />
+      </svg>
       <div className="empty-view-title">Settings</div>
-      <div className="empty-view-sub">Workspace and account settings coming soon.</div>
+      <div className="empty-view-sub">Workspace and account settings coming soon. Configure your preferences and integrations.</div>
     </div>
   )
 }

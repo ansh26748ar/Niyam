@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import type { UserData } from '../api/auth'
+import Header from '../components/Header'
+import Footer from '../components/Footer'
 import Sidebar, { type SidebarPage } from '../components/Sidebar'
 import { PageView } from '../components/PageViews'
 
@@ -21,46 +23,17 @@ const PAGE_TITLES: Record<SidebarPage, string> = {
   'settings':          'Settings',
 }
 
-function BrandIcon() {
-  return (
-    <div className="topnav-brand-icon">
-      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-        <path d="M3 13L8 3L13 13H10L8 9L6 13H3Z" fill="white" />
-      </svg>
-    </div>
-  )
-}
-
-function UserAvatar({ name, avatar }: { name: string; avatar: string | null }) {
-  const initials = name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
-  if (avatar) return <div className="topnav-avatar"><img src={avatar} alt={name} /></div>
-  return <div className="topnav-avatar">{initials}</div>
-}
-
 export default function ProfilePage({ user, token, onSignOut }: Props) {
   const [page, setPage] = useState<SidebarPage>('profile')
 
   return (
     <div className="app-shell">
-      {/* ── Top nav ── */}
-      <nav className="topnav">
-        <div className="topnav-brand">
-          <BrandIcon />
-          ForgeAPI
-        </div>
-        <div className="topnav-right">
-          <span className="topnav-username">{user.name}</span>
-          <button className="btn-nav" onClick={onSignOut}>Sign out</button>
-          <UserAvatar name={user.name} avatar={user.avatar} />
-        </div>
-      </nav>
+      <Header user={user} onSignOut={onSignOut} variant="app" />
 
-      {/* ── Body: sidebar + main ── */}
       <div className="app-body">
         <Sidebar active={page} onChange={setPage} />
 
         <main className="main-content">
-          {/* Page header */}
           <div className="main-header">
             <div className="main-header-left">
               <h1 className="main-title">{PAGE_TITLES[page]}</h1>
@@ -88,10 +61,11 @@ export default function ProfilePage({ user, token, onSignOut }: Props) {
             )}
           </div>
 
-          {/* Page content */}
           <div className="main-body">
             <PageView page={page} user={user} token={token} />
           </div>
+
+          <Footer />
         </main>
       </div>
     </div>
