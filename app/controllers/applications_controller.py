@@ -81,5 +81,9 @@ class ApplicationsController(BaseController, Authenticatable):
         )
         if not result["ok"]:
             return self.render_error(result["error"], status=422)
-        logger.info(f"ApplicationsController#update_stage — id={app_id} status={status}")
+        row = result["data"]
+        logger.info(
+            f"ApplicationsController#update_stage — id={app_id} "
+            f"status={row.get('status')} pipeline_stage_id={row.get('pipeline_stage_id')}"
+        )
         return self.render_json(result["data"])
