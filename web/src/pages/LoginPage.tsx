@@ -1,5 +1,8 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
+import Header from '../components/Header'
+import Footer from '../components/Footer'
+import { useToast } from '../contexts/ToastContext'
 
 interface Props {
   onLogin: (email: string, password: string) => Promise<boolean>
@@ -7,33 +10,22 @@ interface Props {
   error: string | null
 }
 
-function BrandIcon() {
-  return (
-    <div className="auth-brand-icon">
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-        <path d="M3 13L8 3L13 13H10L8 9L6 13H3Z" fill="white" />
-      </svg>
-    </div>
-  )
-}
-
 export default function LoginPage({ onLogin, loading, error }: Props) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const toast = useToast()
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
-    await onLogin(email, password)
+    const success = await onLogin(email, password)
+    if (success) {
+      toast.success('Welcome back!', 'You have been signed in successfully.')
+    }
   }
 
   return (
     <div className="auth-page">
-      <nav className="auth-topbar">
-        <div className="auth-brand">
-          <BrandIcon />
-          ForgeAPI
-        </div>
-      </nav>
+      <Header variant="auth" />
 
       <div className="auth-body">
         <div className="auth-card">
@@ -65,7 +57,7 @@ export default function LoginPage({ onLogin, loading, error }: Props) {
                   type="password"
                   autoComplete="current-password"
                   required
-                  placeholder="••••••••"
+                  placeholder="Enter your password"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   disabled={loading}
@@ -74,9 +66,9 @@ export default function LoginPage({ onLogin, loading, error }: Props) {
 
               {error && (
                 <div className="auth-error" role="alert">
-                  <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
-                    <circle cx="6.5" cy="6.5" r="6" stroke="currentColor" strokeWidth="1.2" />
-                    <path d="M6.5 4v3M6.5 9v.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                    <circle cx="7" cy="7" r="6" stroke="currentColor" strokeWidth="1.2" />
+                    <path d="M7 4.5v3M7 9.5v.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
                   </svg>
                   {error}
                 </div>
@@ -87,7 +79,7 @@ export default function LoginPage({ onLogin, loading, error }: Props) {
                 className="btn-primary"
                 disabled={loading || !email || !password}
               >
-                {loading ? 'Signing in…' : 'Sign in'}
+                {loading ? 'Signing in...' : 'Sign in'}
               </button>
             </form>
 
@@ -97,6 +89,8 @@ export default function LoginPage({ onLogin, loading, error }: Props) {
           </div>
         </div>
       </div>
+
+      <Footer />
     </div>
   )
 }
