@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Link, useOutletContext, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useOutletContext, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import type { DashboardOutletContext } from '../layouts/DashboardOutletContext'
 import { jobsApi } from '../api/jobs'
 import type { Job } from '../api/jobs'
@@ -1238,9 +1238,14 @@ const INTERVIEW_KIT_PARAM = 'kit'
 
 export function InterviewsView() {
   const { token } = useOutletContext<DashboardOutletContext>()
+  const navigate = useNavigate()
+  const { accountId } = useParams<{ accountId: string }>()
   const toast = useToast()
   const [searchParams, setSearchParams] = useSearchParams()
   const [assignments, setAssignments] = useState<InterviewAssignmentRow[]>([])
+  const [listMeta, setListMeta] = useState<{ total: number; page: number; total_pages: number; has_next: boolean; has_prev: boolean } | null>(null)
+  const [listPage, setListPage] = useState(1)
+  const [claimingId, setClaimingId] = useState<number | null>(null)
   const [jobs, setJobs] = useState<Job[]>([])
   const [loading, setLoading] = useState(true)
   const [filterQ, setFilterQ] = useState('')
@@ -1275,24 +1280,49 @@ export function InterviewsView() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [a, j] = await Promise.all([
-        interviewsApi.myAssignments(token, { q: debouncedQ || undefined }),
+      const [res, j] = await Promise.all([
+        interviewsApi.myAssignments(token, {
+          q: debouncedQ || undefined,
+          include_open: true,
+          page: listPage,
+          per_page: 25,
+        }),
         jobsApi.list(token),
       ])
-      setAssignments(a)
+      setAssignments(res.entries)
+      setListMeta(res.meta)
       setJobs(j)
     } catch {
       setAssignments([])
+      setListMeta(null)
     } finally {
       setLoading(false)
     }
-  }, [token, debouncedQ])
+  }, [token, debouncedQ, listPage])
 
   useEffect(() => {
     load()
   }, [load])
 
-  const jobTitle = (jobId: number) => jobs.find(j => j.id === jobId)?.title ?? `Job #${jobId}`
+  useEffect(() => {
+    setListPage(1)
+  }, [debouncedQ])
+
+  const jobTitle = (row: InterviewAssignmentRow) =>
+    row.job?.title ?? jobs.find(j => j.id === row.application?.job_id)?.title ?? `Job #${row.application?.job_id ?? '?'}`
+
+  const claimSlot = async (row: InterviewAssignmentRow) => {
+    setClaimingId(row.id)
+    try {
+      await interviewsApi.claim(token, row.id)
+      toast.success('Interview claimed', 'This round is now assigned to you.')
+      await load()
+    } catch (e: unknown) {
+      toast.error('Could not claim', e instanceof Error ? e.message : 'Error')
+    } finally {
+      setClaimingId(null)
+    }
+  }
 
   const [criterionScores, setCriterionScores] = useState<Record<string, number>>({})
   const [scorePros, setScorePros] = useState('')
@@ -1551,10 +1581,19 @@ export function InterviewsView() {
         </div>
       )}
 
-      <ListHeader title="Interviews" count={assignments.length} />
+      <ListHeader
+        title="Interviews"
+        count={listMeta?.total ?? assignments.length}
+        {...(accountId
+          ? {
+              onAction: () => navigate(`/account/${accountId}/pipeline`),
+              actionLabel: 'Schedule interviews' as const,
+            }
+          : {})}
+      />
       <p className="interviews-lead">
-        Interview rounds assigned to you as interviewer. Open a kit to see focus areas and questions, then submit a scorecard.
-        Rows appear once you’re set as the interviewer for that assignment.
+        Rounds assigned to you, plus <strong>open slots</strong> (unclaimed) when a candidate reaches an interview stage in the pipeline.
+        Claim a slot to assign it to yourself, then open the kit and submit a scorecard.
       </p>
       <div className="list-filters-bar" role="search" aria-label="Filter interview assignments">
         <input
@@ -1576,7 +1615,7 @@ export function InterviewsView() {
         </div>
         {loading && <LoadingRow />}
         {!loading && assignments.length === 0 && (
-          <EmptyRow text="No interview assignments yet. When you’re set as interviewer on a slot, it appears here." />
+          <EmptyRow text="No interview rounds yet. When candidates reach an interview stage, assignments appear here — claim an open slot or wait to be assigned." />
         )}
         {assignments.map(row => (
           <div key={row.id} className="list-row">
@@ -1584,25 +1623,62 @@ export function InterviewsView() {
               <div className="list-row-name">{row.interview_plan?.name ?? `Plan #${row.interview_plan_id}`}</div>
               <div className="list-row-sub">
                 {row.application?.candidate_name || row.application?.candidate_email || 'Candidate'}
+                {row.is_open_slot ? (
+                  <span className="tag tag-orange" style={{ marginLeft: 8 }}>
+                    Open slot
+                  </span>
+                ) : null}
               </div>
             </div>
-            <div className="list-col list-row-sub">
-              {row.application ? jobTitle(row.application.job_id) : '—'}
-            </div>
+            <div className="list-col list-row-sub">{row.application ? jobTitle(row) : '—'}</div>
             <div className="list-col">
               <span className={`tag ${STAGE_COLORS[row.status] ?? 'tag-blue'}`}>{row.status}</span>
             </div>
             <div className="list-col list-row-sub">
               {row.scheduled_at ? new Date(row.scheduled_at).toLocaleString() : '—'}
             </div>
-            <div className="list-col">
-              <button type="button" className="btn-row-action" onClick={() => openKit(row)}>
-                Open kit
-              </button>
+            <div className="list-col list-col-actions">
+              {row.is_open_slot ? (
+                <button
+                  type="button"
+                  className="btn-row-action"
+                  disabled={claimingId === row.id}
+                  onClick={() => void claimSlot(row)}
+                >
+                  {claimingId === row.id ? 'Claiming…' : 'Claim'}
+                </button>
+              ) : (
+                <button type="button" className="btn-row-action" onClick={() => openKit(row)}>
+                  Open kit
+                </button>
+              )}
             </div>
           </div>
         ))}
       </div>
+      {listMeta && listMeta.total_pages > 1 && (
+        <div className="audit-log-pagination" style={{ marginTop: 16 }}>
+          <button
+            type="button"
+            className="btn-primary btn-primary--inline"
+            disabled={!listMeta.has_prev}
+            onClick={() => setListPage(p => Math.max(1, p - 1))}
+          >
+            Previous
+          </button>
+          <span className="audit-log-page-indicator">
+            Page {listMeta.page} of {listMeta.total_pages} ({listMeta.total} total)
+          </span>
+          <button
+            type="button"
+            className="btn-primary btn-primary--inline"
+            disabled={!listMeta.has_next}
+            onClick={() => setListPage(p => p + 1)}
+          >
+            Next
+          </button>
+        </div>
+      )}
     </>
   )
 }

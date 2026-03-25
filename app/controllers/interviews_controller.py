@@ -33,11 +33,39 @@ class InterviewsController(BaseController, Authenticatable):
     def my_assignments(self):
         account_id = self._account_id()
         user_id = self._user_id()
-        status = self.request.query_params.get("status")
-        q = self.request.query_params.get("q")
+        q = self.request.query_params
+        status = q.get("status")
+        search = q.get("q")
+        include_open = (q.get("include_open") or "true").strip().lower() in ("1", "true", "yes")
+        try:
+            page = int(q.get("page") or 1)
+        except (TypeError, ValueError):
+            page = 1
+        try:
+            per_page = int(q.get("per_page") or 50)
+        except (TypeError, ValueError):
+            per_page = 50
         result = InterviewWorkflowService(self.db).list_my_assignments(
-            account_id, user_id, status=status, q=q
+            account_id,
+            user_id,
+            status=status,
+            q=search,
+            include_open=include_open,
+            page=page,
+            per_page=per_page,
         )
+        if not result.get("ok"):
+            return self.render_error(result.get("error") or "Failed", status=500)
+        return self.render_json(result["data"], meta=result.get("meta"))
+
+    def claim(self):
+        account_id = self._account_id()
+        assignment_id = int(self.request.path_params["assignment_id"])
+        result = InterviewWorkflowService(self.db).claim_assignment(
+            account_id, assignment_id, self._user_id()
+        )
+        if not result["ok"]:
+            return self.render_error(result["error"], status=422)
         return self.render_json(result["data"])
 
     def kit(self):
