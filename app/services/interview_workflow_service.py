@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select
 
 from app.helpers.pg_search import normalize_q, trigram_or
 from app.models.application import Application
@@ -38,8 +38,35 @@ class InterviewWorkflowService(BaseService):
         user_id: int,
         status: str | None = None,
         q: str | None = None,
+        *,
+        include_open: bool = True,
+        page: int = 1,
+        per_page: int = 50,
     ) -> dict:
+        """
+        Interviewer dashboard rows.
+
+        - Default **include_open**: mine (interviewer_id == me) plus **unclaimed** pending slots
+          (interviewer_id IS NULL) so interviewers can claim rounds after pipeline sync.
+        - Set include_open=False to only list slots already assigned to the current user.
+        """
+        per_page = min(max(per_page, 1), 100)
+        page = max(page, 1)
+        offset = (page - 1) * per_page
+
         nq = normalize_q(q)
+        assignee_filter = (
+            or_(
+                InterviewAssignment.interviewer_id == user_id,
+                and_(
+                    InterviewAssignment.interviewer_id.is_(None),
+                    InterviewAssignment.status == "pending",
+                ),
+            )
+            if include_open
+            else (InterviewAssignment.interviewer_id == user_id)
+        )
+
         if nq:
             stmt = (
                 select(InterviewAssignment)
@@ -54,7 +81,7 @@ class InterviewWorkflowService(BaseService):
                 )
                 .where(
                     InterviewAssignment.account_id == account_id,
-                    InterviewAssignment.interviewer_id == user_id,
+                    assignee_filter,
                     Application.account_id == account_id,
                     Application.deleted_at == None,
                     Job.account_id == account_id,
@@ -70,33 +97,34 @@ class InterviewWorkflowService(BaseService):
                         ),
                     ),
                 )
-                .order_by(
-                    InterviewAssignment.scheduled_at.asc().nulls_last(),
-                    InterviewAssignment.id.asc(),
-                )
             )
         else:
-            stmt = (
-                select(InterviewAssignment)
-                .where(
-                    InterviewAssignment.account_id == account_id,
-                    InterviewAssignment.interviewer_id == user_id,
-                )
-                .order_by(
-                    InterviewAssignment.scheduled_at.asc().nulls_last(),
-                    InterviewAssignment.id.asc(),
-                )
+            stmt = select(InterviewAssignment).where(
+                InterviewAssignment.account_id == account_id,
+                assignee_filter,
             )
+
         if status:
             stmt = stmt.where(InterviewAssignment.status == status)
+
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total_n = int(self.db.scalar(count_stmt) or 0)
+
+        stmt = stmt.order_by(
+            InterviewAssignment.scheduled_at.asc().nulls_last(),
+            InterviewAssignment.id.asc(),
+        ).offset(offset).limit(per_page)
         rows = list(self.db.execute(stmt).scalars().all())
+
         out = []
         for a in rows:
             d = a.to_dict()
+            d["is_open_slot"] = a.interviewer_id is None
             plan = InterviewPlan.find_by(self.db, id=a.interview_plan_id, account_id=account_id)
             d["interview_plan"] = plan.to_dict() if plan else None
             app = Application.find_by(self.db, id=a.application_id, account_id=account_id)
             if app:
+                job = Job.find_by(self.db, id=app.job_id, account_id=account_id)
                 d["application"] = {
                     "id": app.id,
                     "candidate_id": app.candidate_id,
@@ -104,10 +132,38 @@ class InterviewWorkflowService(BaseService):
                     "candidate_email": app.candidate_email,
                     "job_id": app.job_id,
                 }
+                d["job"] = {"id": job.id, "title": job.title} if job else None
             else:
                 d["application"] = None
+                d["job"] = None
             out.append(d)
-        return self.success(out)
+
+        total_pages = (total_n + per_page - 1) // per_page if total_n else 0
+        return {
+            "ok": True,
+            "data": out,
+            "meta": {
+                "total": total_n,
+                "page": page,
+                "per_page": per_page,
+                "total_pages": total_pages,
+                "has_next": page < total_pages,
+                "has_prev": page > 1,
+            },
+        }
+
+    def claim_assignment(self, account_id: int, assignment_id: int, user_id: int) -> dict:
+        """Assign this slot to the current user if still unclaimed."""
+        ass = InterviewAssignment.find_by(self.db, id=assignment_id, account_id=account_id)
+        if not ass:
+            return self.failure("Assignment not found")
+        if ass.interviewer_id is not None and ass.interviewer_id != user_id:
+            return self.failure("This interview is already assigned to another teammate")
+        now = datetime.now(timezone.utc)
+        ass.interviewer_id = user_id
+        ass.updated_at = now
+        ass.save(self.db)
+        return self.success(ass.to_dict())
 
     def get_kit_for_assignment(self, account_id: int, assignment_id: int) -> dict:
         ass = InterviewAssignment.find_by(self.db, id=assignment_id, account_id=account_id)
@@ -158,6 +214,12 @@ class InterviewWorkflowService(BaseService):
             return self.failure("Assignment not found")
         if ass.interviewer_id is not None and ass.interviewer_id != interviewer_id:
             return self.failure("You are not the assigned interviewer for this slot")
+
+        now_claim = datetime.now(timezone.utc)
+        if ass.interviewer_id is None:
+            ass.interviewer_id = interviewer_id
+            ass.updated_at = now_claim
+            ass.save(self.db)
 
         rec = (data.get("overall_recommendation") or "").strip().lower().replace(" ", "_")
         if rec == "strongno":
@@ -211,8 +273,6 @@ class InterviewWorkflowService(BaseService):
         )
         sc.save(self.db)
 
-        if ass.interviewer_id is None:
-            ass.interviewer_id = interviewer_id
         ass.status = "completed"
         ass.updated_at = now
         ass.save(self.db)

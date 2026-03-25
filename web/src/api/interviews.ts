@@ -13,6 +13,7 @@ export interface InterviewAssignmentRow {
   scorecard_reminder_sent_at?: string | null
   created_at: string
   updated_at: string
+  is_open_slot?: boolean
   interview_plan?: { id: number; name: string; pipeline_stage_id: number | null; position: number } | null
   application?: {
     id: number
@@ -21,6 +22,16 @@ export interface InterviewAssignmentRow {
     candidate_email: string | null
     job_id: number
   } | null
+  job?: { id: number; title: string } | null
+}
+
+export interface MyAssignmentsMeta {
+  total: number
+  page: number
+  per_page: number
+  total_pages: number
+  has_next: boolean
+  has_prev: boolean
 }
 
 export interface ScorecardCriterion {
@@ -47,31 +58,55 @@ function authHeaders(token: string) {
   return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
 }
 
-async function req<T>(path: string, token: string, options: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    headers: { ...authHeaders(token), ...(options.headers as Record<string, string> ?? {}) },
-    ...options,
-  })
-  const json = await res.json()
-  if (!json.success) throw new Error(json.error || 'Request failed')
-  return json.data as T
+export type MyAssignmentsParams = {
+  status?: string
+  q?: string
+  include_open?: boolean
+  page?: number
+  per_page?: number
 }
 
-export type MyAssignmentsParams = { status?: string; q?: string }
-
 export const interviewsApi = {
-  myAssignments: (token: string, params?: MyAssignmentsParams) => {
+  myAssignments: async (
+    token: string,
+    params?: MyAssignmentsParams,
+  ): Promise<{ entries: InterviewAssignmentRow[]; meta: MyAssignmentsMeta }> => {
     const p = new URLSearchParams()
     if (params?.status) p.set('status', params.status)
     if (params?.q?.trim()) p.set('q', params.q.trim())
+    if (params?.include_open === false) p.set('include_open', 'false')
+    if (params?.page) p.set('page', String(params.page))
+    if (params?.per_page) p.set('per_page', String(params.per_page))
     const qs = p.toString()
-    return req<InterviewAssignmentRow[]>(`/interviews/my_assignments${qs ? `?${qs}` : ''}`, token)
+    const res = await fetch(`${BASE}/interviews/my_assignments${qs ? `?${qs}` : ''}`, {
+      headers: authHeaders(token),
+    })
+    const json = await res.json()
+    if (!json.success) throw new Error(json.error || 'Request failed')
+    return {
+      entries: json.data as InterviewAssignmentRow[],
+      meta: json.meta as MyAssignmentsMeta,
+    }
   },
 
-  getKit: (token: string, assignmentId: number) =>
-    req<InterviewKitPayload>(`/interviews/${assignmentId}/kit`, token),
+  claim: async (token: string, assignmentId: number): Promise<InterviewAssignmentRow> => {
+    const res = await fetch(`${BASE}/interviews/${assignmentId}/claim`, {
+      method: 'POST',
+      headers: authHeaders(token),
+    })
+    const json = await res.json()
+    if (!json.success) throw new Error(json.error || 'Request failed')
+    return json.data as InterviewAssignmentRow
+  },
 
-  submitScorecard: (
+  getKit: async (token: string, assignmentId: number): Promise<InterviewKitPayload> => {
+    const res = await fetch(`${BASE}/interviews/${assignmentId}/kit`, { headers: authHeaders(token) })
+    const json = await res.json()
+    if (!json.success) throw new Error(json.error || 'Request failed')
+    return json.data as InterviewKitPayload
+  },
+
+  submitScorecard: async (
     token: string,
     assignmentId: number,
     data: {
@@ -83,13 +118,18 @@ export const interviewsApi = {
       cons?: string | null
       internal_notes?: string | null
     },
-  ) =>
-    req<Record<string, unknown>>(`/interviews/${assignmentId}/scorecard`, token, {
+  ): Promise<Record<string, unknown>> => {
+    const res = await fetch(`${BASE}/interviews/${assignmentId}/scorecard`, {
       method: 'POST',
+      headers: authHeaders(token),
       body: JSON.stringify(data),
-    }),
+    })
+    const json = await res.json()
+    if (!json.success) throw new Error(json.error || 'Request failed')
+    return json.data as Record<string, unknown>
+  },
 
-  updateAssignment: (
+  updateAssignment: async (
     token: string,
     assignmentId: number,
     data: Partial<{
@@ -99,9 +139,14 @@ export const interviewsApi = {
       interview_ends_at: string | null
       calendar_event_url: string | null
     }>,
-  ) =>
-    req<InterviewAssignmentRow>(`/interviews/${assignmentId}`, token, {
+  ): Promise<InterviewAssignmentRow> => {
+    const res = await fetch(`${BASE}/interviews/${assignmentId}`, {
       method: 'PATCH',
+      headers: authHeaders(token),
       body: JSON.stringify(data),
-    }),
+    })
+    const json = await res.json()
+    if (!json.success) throw new Error(json.error || 'Request failed')
+    return json.data as InterviewAssignmentRow
+  },
 }

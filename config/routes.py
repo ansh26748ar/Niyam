@@ -384,6 +384,11 @@ def draw_routes(app: "FastAPI") -> None:
         methods=["GET"],
     )
     router.add_api_route(
+        "/interviews/{assignment_id:int}/claim",
+        _wrap(InterviewsController, "claim", lambda c: c.claim()),
+        methods=["POST"],
+    )
+    router.add_api_route(
         "/interviews/{assignment_id:int}/kit",
         _wrap(InterviewsController, "kit", lambda c: c.kit()),
         methods=["GET"],
