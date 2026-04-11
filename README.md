@@ -1,14 +1,10 @@
 <p align="center">
-  <img src="docs/readme/niyam-wordmark-dark.png" alt="Niyam ATS" width="560" />
+  <img src="docs/readme/niyam-wordmark-dark.png" alt="Niyam ATS — shield mark and wordmark" width="720" />
 </p>
 
 <p align="center">
   <b>Applicant tracking for teams that outgrow spreadsheets.</b><br />
   Multi-account workspaces, hiring pipeline, structured interviews, e-signatures, referrals, and audit-ready operations — backed by a Rails-style FastAPI core and a React SPA.
-</p>
-
-<p align="center">
-  <img src="docs/readme/niyam-mark.png" alt="Niyam" width="120" />
 </p>
 
 <p align="center">
@@ -150,7 +146,7 @@ flowchart TB
 ├── db/migrations/versions/
 ├── web/                    # React SPA → build to ../static
 ├── static/                 # Production frontend (from npm run build)
-├── docs/readme/            # README hero images (wordmark + mark)
+├── docs/readme/            # README brand assets (tight-crop wordmark; optional mark)
 └── tests/
 ```
 
