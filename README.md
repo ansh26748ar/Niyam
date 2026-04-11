@@ -21,7 +21,7 @@ Multi-account workspaces · configurable hiring pipeline · structured interview
 
 <br />
 
-[Capabilities](#platform-capabilities) · [Quick start](#quick-start) · [Architecture](#architecture) · [Tech stack](#tech-stack) · [Repository layout](#repository-layout) · [Configuration](#configuration) · [Deployment](#deployment)
+[Capabilities](#platform-capabilities) · [Screenshots](#product-screenshots) · [Quick start](#quick-start) · [Architecture](#architecture) · [Tech stack](#tech-stack) · [Repository layout](#repository-layout) · [Configuration](#configuration) · [Deployment](#deployment)
 
 </div>
 
@@ -30,6 +30,108 @@ Multi-account workspaces · configurable hiring pipeline · structured interview
 ## Overview
 
 **Niyam** is a full-stack ATS: a **FastAPI** and **PostgreSQL** API with a **React** SPA. Features are wired through `config/routes.py` on the backend and `web/src/` on the frontend—what follows reflects what exists in this repository today.
+
+---
+
+## Product screenshots
+
+Below are real UI captures from the Niyam web app (React SPA): recruiting workflows, candidate experience, referrals, workspace settings, e-signatures, and compliance.
+
+### Recruiting: pipeline, jobs, and requisitions
+
+<p align="center">
+  <img src="docs/readme/screenshots/pipeline-kanban.png" alt="Hiring pipeline Kanban board with stages, filters, and candidate cards" width="820" />
+</p>
+
+<p align="center"><sub>Hiring pipeline — per-job stages, filters, KPIs, and drag-and-drop style triage across Screening, Interview, and more.</sub></p>
+
+<p align="center">
+  <img src="docs/readme/screenshots/jobs-dashboard-grid.png" alt="Jobs dashboard with grid cards, filters, and new job action" width="820" />
+</p>
+
+<p align="center"><sub>Jobs — grid, list, and table views; status, location, vacancies, and quick actions (edit, duplicate, archive).</sub></p>
+
+<p align="center">
+  <img src="docs/readme/screenshots/job-editor-skills.png" alt="Job setup wizard step for required and nice-to-have skills" width="820" />
+</p>
+
+<p align="center"><sub>Job editor — guided requisition setup with required vs nice-to-have skills for matching and scorecards.</sub></p>
+
+### Candidates, interviews, and documents
+
+<p align="center">
+  <img src="docs/readme/screenshots/interviews-workbench.png" alt="Interviews list with rounds, claim slot, and open kit actions" width="820" />
+</p>
+
+<p align="center"><sub>Interviews — assigned rounds, open slots to claim, interview kits, and scorecard submission from one workbench.</sub></p>
+
+<p align="center">
+  <img src="docs/readme/screenshots/candidate-esign.png" alt="Candidate profile with E-sign tab and document status" width="820" />
+</p>
+
+<p align="center"><sub>Candidate record — pipeline context, e-sign requests, template generation, and signing status in one place.</sub></p>
+
+<p align="center">
+  <img src="docs/readme/screenshots/signed-documents-library.png" alt="Signed documents workspace table with status and actions" width="820" />
+</p>
+
+<p align="center"><sub>Signed documents — workspace-wide list of e-sign packages with status, signing links, and links back to applications.</sub></p>
+
+### Referrals
+
+<p align="center">
+  <img src="docs/readme/screenshots/referrals-open-roles.png" alt="Referrals hub with open roles table and copy referral link" width="820" />
+</p>
+
+<p align="center"><sub>Referrals — open roles, per-job referral links, leaderboard and team views for admins, bonus rules from the job editor.</sub></p>
+
+### Workspace settings
+
+<p align="center">
+  <img src="docs/readme/screenshots/settings-organization.png" alt="Organization settings with company profile and regional defaults" width="820" />
+</p>
+
+<p align="center"><sub>Organization — company profile, branding URL, careers page, language and currency defaults for the workspace.</sub></p>
+
+<p align="center">
+  <img src="docs/readme/screenshots/settings-custom-fields-jobs.png" alt="Custom job fields with validated attribute definitions" width="820" />
+</p>
+
+<p align="center"><sub>Custom fields — typed attributes for jobs and candidates, validated on save for reporting and apply forms.</sub></p>
+
+<p align="center">
+  <img src="docs/readme/screenshots/settings-communication-channels.png" alt="Communication channels for email Gmail OAuth and future providers" width="820" />
+</p>
+
+<p align="center"><sub>Communication channels — Gmail OAuth, SMTP, and room for additional providers (e.g. Slack) later.</sub></p>
+
+### Audit and compliance
+
+<p align="center">
+  <img src="docs/readme/screenshots/audit-compliance-logs.png" alt="Audit log table with streams, filters, and actor details" width="820" />
+</p>
+
+<p align="center"><sub>Audit & compliance — filterable audit and activity streams, outcomes, actors, and request correlation for governance.</sub></p>
+
+### E-signatures
+
+<p align="center">
+  <img src="docs/readme/screenshots/esign-templates.png" alt="E-sign templates list with edit and delete actions" width="820" />
+</p>
+
+<p align="center"><sub>E-sign templates — reusable offers and NDAs with merge tags, edited as blocks and rendered to HTML for candidates.</sub></p>
+
+<p align="center">
+  <img src="docs/readme/screenshots/esign-automation-rules.png" alt="E-sign automation rules tied to pipeline stages" width="820" />
+</p>
+
+<p align="center"><sub>E-sign automation — queue templates when candidates enter selected pipeline stages (worker-delivered packages).</sub></p>
+
+<p align="center">
+  <img src="docs/readme/screenshots/esign-secure-signing.png" alt="Candidate secure signing page with agreement and download PDF" width="820" />
+</p>
+
+<p align="center"><sub>Candidate signing — tokenized public flow: review agreement, capture signature, confirmation and signed PDF download.</sub></p>
 
 ---
 
@@ -211,7 +313,7 @@ flowchart TB
 ├── db/migrations/versions/
 ├── web/                    # React SPA → build to ../static
 ├── static/                 # Production frontend (from npm run build)
-├── docs/readme/            # README brand assets
+├── docs/readme/            # README brand assets + screenshots/
 └── tests/
 ```
 
