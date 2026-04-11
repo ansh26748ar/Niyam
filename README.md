@@ -202,7 +202,7 @@ flowchart TB
 ├── main.py                 # FastAPI app, middleware, health
 ├── manage.py               # CLI: runserver, db:*, worker, scheduler, shell, routes
 ├── requirements.txt
-├── pyproject.toml          # fastforge scaffold CLI metadata
+├── pyproject.toml          # Python project metadata
 ├── alembic.ini
 ├── .env.example
 │
@@ -374,20 +374,6 @@ pytest tests/ -v --cov=app --cov-report=term-missing
 
 ---
 
-## Optional: fastforge scaffold CLI
-
-This repo includes a **`fastforge`** package in **`pyproject.toml`**. Install in editable mode if you use generators:
-
-```bash
-pip install -e .
-fastforge new my_app
-fastforge generate model MyModel
-```
-
-Generated layouts may differ from this monolith; this README describes the **Niyam ATS** application.
-
----
-
 ## License
 
-See **`pyproject.toml`** (MIT for the bundled **fastforge** CLI). Application code: follow your organization’s policy.
+See **`pyproject.toml`** for package licensing. Application code: follow your organization’s policy.
