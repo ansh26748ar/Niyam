@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useParams } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
 import { useToast } from '../../contexts/ToastContext'
 import {
@@ -27,6 +28,8 @@ const FIELD_TYPE_LABELS: Record<CustomAttributeDefinition['field_type'], string>
 
 export default function CustomFieldsEntityPage({ entityType }: { entityType: CustomAttributeEntityType }) {
   const { getToken } = useAuth()
+  const { accountId: accountIdParam } = useParams<{ accountId: string }>()
+  const accountId = accountIdParam ? Number(accountIdParam) : NaN
   const { success, error: showError } = useToast()
   const token = getToken()
   const titleId = useId()
@@ -68,7 +71,7 @@ export default function CustomFieldsEntityPage({ entityType }: { entityType: Cus
     if (!token) return
     setLoading(true)
     try {
-      const data = await customAttributesApi.list(token, entityType)
+      const data = await customAttributesApi.list(token, entityType, accountId)
       setRows(data.sort((a, b) => a.position - b.position || a.id - b.id))
     } catch (e) {
       showError('Could not load', e instanceof Error ? e.message : undefined)
@@ -76,7 +79,7 @@ export default function CustomFieldsEntityPage({ entityType }: { entityType: Cus
     } finally {
       setLoading(false)
     }
-  }, [token, entityType, showError])
+  }, [token, entityType, accountId, showError])
 
   useEffect(() => {
     void load()
@@ -150,7 +153,7 @@ export default function CustomFieldsEntityPage({ entityType }: { entityType: Cus
     }
     setAdding(true)
     try {
-      await customAttributesApi.create(token, {
+      await customAttributesApi.create(token, accountId, {
         entity_type: entityType,
         attribute_key: key,
         label,
@@ -173,7 +176,7 @@ export default function CustomFieldsEntityPage({ entityType }: { entityType: Cus
     if (!token) return
     if (!window.confirm(`Remove “${r.label}” (${r.attribute_key})?`)) return
     try {
-      await customAttributesApi.delete(token, r.id)
+      await customAttributesApi.delete(token, accountId, r.id)
       success('Removed', r.label)
       await load()
     } catch (e) {

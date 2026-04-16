@@ -168,7 +168,7 @@ export default function ApplicationDetailPage() {
       }
 
       try {
-        const defs = await customAttributesApi.list(token, 'application')
+        const defs = await customAttributesApi.list(token, 'application', accountId)
         setCustDefs(defs)
         const base =
           row.custom_attributes && typeof row.custom_attributes === 'object' && !Array.isArray(row.custom_attributes)
@@ -188,7 +188,7 @@ export default function ApplicationDetailPage() {
     } finally {
       setLoading(false)
     }
-  }, [token, appId])
+  }, [token, appId, accountId])
 
   useEffect(() => {
     void load()

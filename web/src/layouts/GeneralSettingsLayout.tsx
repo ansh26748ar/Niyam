@@ -2,6 +2,7 @@ import { NavLink, Outlet, useParams } from 'react-router-dom'
 
 const NAV = [
   { path: 'organization', label: 'Organization', desc: 'Company, locale & timezone' },
+  { path: 'job-setup-flow', label: 'Job setup flow', desc: 'Control visible setup sections' },
   { path: 'departments', label: 'Departments', desc: 'Teams for jobs and filters' },
   { path: 'job-locations', label: 'Job locations', desc: 'Countries for job location field' },
   { path: 'workspace', label: 'Workspace', desc: 'Slug, plan & shortcuts' },
@@ -33,6 +34,8 @@ export default function GeneralSettingsLayout() {
                 <span className="esign-sidenav-link-icon" aria-hidden>
                   {item.path === 'organization' ? (
                     <IconOrg />
+                  ) : item.path === 'job-setup-flow' ? (
+                    <IconFlow />
                   ) : item.path === 'departments' ? (
                     <IconDepartments />
                   ) : item.path === 'job-locations' ? (
@@ -75,6 +78,14 @@ function IconDepartments() {
     <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}>
       <path d="M4 6h7v12H4zM13 10h7v8h-7z" strokeLinejoin="round" />
       <path d="M9 6V4h6v2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function IconFlow() {
+  return (
+    <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}>
+      <path d="M5 5h6v4H5zM13 15h6v4h-6zM8 9v3h8v3" strokeLinejoin="round" strokeLinecap="round" />
     </svg>
   )
 }

@@ -15,31 +15,35 @@ import { customAttributesApi, type CustomAttributeDefinition } from '../api/cust
 import { labelsApi, type AccountLabelRow } from '../api/labels'
 import { getOrganizationSettings, type OrganizationSettings } from '../api/accountOrganization'
 import { fetchCountriesCatalog, type CountryRow } from '../api/reference'
+import {
+  DEFAULT_ENABLED_JOB_SETUP_SECTIONS,
+  DEFAULT_JOB_SETUP_FIELDS_BY_SECTION,
+  type JobSetupSectionId,
+} from '../constants/jobSetupSections'
 
 function normalizeOrgSettings(row: OrganizationSettings): OrganizationSettings {
+  const catalog = Array.isArray(row.job_setup_catalog) ? row.job_setup_catalog : []
+  const enabledFields: Record<string, string[]> = {}
+  for (const section of catalog) {
+    const defaultFieldIds = section.fields.map(field => field.id)
+    const current = row.enabled_job_setup_fields?.[section.id]
+    enabledFields[section.id] = Array.isArray(current) && current.length ? current : defaultFieldIds
+  }
   return {
     ...row,
+    job_setup_catalog: catalog,
     departments: Array.isArray(row.departments) ? row.departments : [],
     enabled_country_codes:
       row.enabled_country_codes === undefined ? null : row.enabled_country_codes,
+    enabled_job_setup_sections:
+      Array.isArray(row.enabled_job_setup_sections) && row.enabled_job_setup_sections.length
+        ? row.enabled_job_setup_sections
+        : DEFAULT_ENABLED_JOB_SETUP_SECTIONS,
+    enabled_job_setup_fields: enabledFields,
   }
 }
 
-type JobStepId =
-  | 'basic_info'
-  | 'skills'
-  | 'compensation'
-  | 'referral'
-  | 'hiring_team'
-  | 'pipeline'
-  | 'interview'
-  | 'evaluation'
-  | 'posting'
-  | 'automation'
-  | 'analytics'
-  | 'attachments'
-  | 'permissions'
-  | 'compliance'
+type JobStepId = JobSetupSectionId
 
 const JOB_EDITOR_STEP_PARAM = 'step'
 
@@ -1435,10 +1439,68 @@ export default function JobEditorPage() {
   const jobsBase = `/account/${accountId}/jobs`
   const numericId = isNew ? null : editJobId
   const hasPostCreateSteps = numericId != null && !Number.isNaN(numericId) && numericId > 0
+  const enabledStepIds = orgSettings?.enabled_job_setup_sections ?? DEFAULT_ENABLED_JOB_SETUP_SECTIONS
+  const enabledFieldMap: Record<string, string[]> =
+    orgSettings?.enabled_job_setup_fields ?? DEFAULT_JOB_SETUP_FIELDS_BY_SECTION
+
+  const isSectionFieldEnabled = useCallback(
+    (sectionId: string, fieldId: string) => {
+      const enabled = enabledFieldMap[sectionId]
+      if (!Array.isArray(enabled) || !enabled.length) return true
+      return enabled.includes(fieldId)
+    },
+    [enabledFieldMap],
+  )
 
   const visibleSteps = useMemo(
-    () => (isNew ? ALL_STEP_DEFS.filter(s => NEW_JOB_STEPS.includes(s.id)) : ALL_STEP_DEFS),
-    [isNew],
+    () =>
+      ALL_STEP_DEFS.filter(s => enabledStepIds.includes(s.id))
+        .filter(s => (enabledFieldMap[s.id]?.length ?? 1) > 0)
+        .filter(s =>
+        isNew ? NEW_JOB_STEPS.includes(s.id) : true,
+      ),
+    [isNew, enabledStepIds, enabledFieldMap],
+  )
+
+  const customDefsByKey = useMemo(() => {
+    const map = new Map<string, CustomAttributeDefinition>()
+    for (const def of jobAttrDefs) map.set(def.attribute_key, def)
+    return map
+  }, [jobAttrDefs])
+
+  const sectionCustomDefs = useCallback(
+    (sectionId: string): CustomAttributeDefinition[] => {
+      const ids = enabledFieldMap[sectionId] ?? []
+      const out: CustomAttributeDefinition[] = []
+      for (const tokenId of ids) {
+        if (!tokenId.startsWith('custom:')) continue
+        const key = tokenId.slice(7)
+        const def = customDefsByKey.get(key)
+        if (def) out.push(def)
+      }
+      return out
+    },
+    [enabledFieldMap, customDefsByKey],
+  )
+
+  const renderSectionCustomFields = useCallback(
+    (sectionId: string) => {
+      const defs = sectionCustomDefs(sectionId)
+      if (!defs.length) return null
+      return (
+        <div className="job-editor-card" style={{ marginTop: 16 }}>
+          <h3 className="job-editor-card-title">Custom fields</h3>
+          <CustomAttributeFields
+            definitions={defs}
+            values={jobCustomFields}
+            onChange={setJobCustomFields}
+            disabled={saving}
+            idPrefix={`job-cf-${sectionId}`}
+          />
+        </div>
+      )
+    },
+    [sectionCustomDefs, jobCustomFields, saving],
   )
 
   const stepParamRaw = searchParams.get(JOB_EDITOR_STEP_PARAM)
@@ -1522,10 +1584,10 @@ export default function JobEditorPage() {
   useEffect(() => {
     if (!token) return
     customAttributesApi
-      .list(token, 'job')
+      .list(token, 'job', accountId)
       .then(setJobAttrDefs)
       .catch(() => setJobAttrDefs([]))
-  }, [token])
+  }, [token, accountId])
 
   useEffect(() => {
     if (!token) return
@@ -2002,6 +2064,7 @@ export default function JobEditorPage() {
             <div className="job-editor-sheet-body job-editor-sheet-body--step">
               {stepId === 'basic_info' && (
                 <section className="job-step-pane job-basic-pane">
+                  {isSectionFieldEnabled('basic_info', 'core_details') && (
                   <div className="job-basic-section job-basic-section--first">
                     <h3 className="job-basic-section-title">Core details</h3>
                     <div className="job-basic-top">
@@ -2028,7 +2091,9 @@ export default function JobEditorPage() {
                       </div>
                     </div>
                   </div>
+                  )}
 
+                  {isSectionFieldEnabled('basic_info', 'location_mode') && (
                   <div className="job-basic-section">
                     <h3 className="job-basic-section-title">Location &amp; mode</h3>
                     <div className="job-basic-grid">
@@ -2107,7 +2172,9 @@ export default function JobEditorPage() {
                       </JobEditorField>
                     </div>
                   </div>
+                  )}
 
+                  {isSectionFieldEnabled('basic_info', 'role_characteristics') && (
                   <div className="job-basic-section">
                     <h3 className="job-basic-section-title">Role characteristics</h3>
                     <div className="job-basic-grid job-basic-grid--pair">
@@ -2138,7 +2205,9 @@ export default function JobEditorPage() {
                       </JobEditorField>
                     </div>
                   </div>
+                  )}
 
+                  {isSectionFieldEnabled('basic_info', 'requirements') && (
                   <div className="job-basic-section">
                     <h3 className="job-basic-section-title">Requirements</h3>
                     <div className="job-basic-grid job-basic-grid--headcount">
@@ -2153,12 +2222,13 @@ export default function JobEditorPage() {
                       </JobEditorField>
                     </div>
                   </div>
+                  )}
 
-                  {jobAttrDefs.length > 0 && (
+                  {isSectionFieldEnabled('basic_info', 'custom_fields') && sectionCustomDefs('basic_info').length > 0 && (
                     <div className="job-basic-section">
                       <h3 className="job-basic-section-title">Custom fields</h3>
                       <CustomAttributeFields
-                        definitions={jobAttrDefs}
+                        definitions={sectionCustomDefs('basic_info')}
                         values={jobCustomFields}
                         onChange={setJobCustomFields}
                         disabled={saving}
@@ -2166,7 +2236,7 @@ export default function JobEditorPage() {
                       />
                     </div>
                   )}
-                  {!isNew && job && (
+                  {isSectionFieldEnabled('basic_info', 'labels') && !isNew && job && (
                     <div className="job-basic-section">
                       <h3 className="job-basic-section-title">Labels</h3>
                       <LabelMultiSelect
@@ -2179,6 +2249,7 @@ export default function JobEditorPage() {
                     </div>
                   )}
 
+                  {isSectionFieldEnabled('basic_info', 'description') && (
                   <div className="job-basic-section job-basic-section--description">
                     <h3 className="job-basic-section-title">Description</h3>
                     <p className="job-basic-section-lead">Public-facing copy for the posting. Use headings and bullets for skimmability.</p>
@@ -2191,6 +2262,7 @@ export default function JobEditorPage() {
                       />
                     </div>
                   </div>
+                  )}
 
                   {!isNew && job && (
                     <footer className="job-basic-slug-foot">
@@ -2201,7 +2273,7 @@ export default function JobEditorPage() {
                 </section>
               )}
 
-              {stepId === 'skills' && (
+              {stepId === 'skills' && isSectionFieldEnabled('skills', 'main') && (
                 <section className="job-step-pane job-skills-pane" aria-labelledby="step-skills">
                   <h2 id="step-skills" className="visually-hidden">
                     Configure job skills
@@ -2263,10 +2335,11 @@ export default function JobEditorPage() {
                       </span>
                     </button>
                   </footer>
+                  {renderSectionCustomFields('skills')}
                 </section>
               )}
 
-              {stepId === 'compensation' && (
+              {stepId === 'compensation' && isSectionFieldEnabled('compensation', 'main') && (
                 <section className="job-step-pane job-compensation-pane">
                   <div className="job-compensation-card">
                     <div className="job-compensation-card-head">
@@ -2380,10 +2453,11 @@ export default function JobEditorPage() {
                       </JobEditorField>
                     </div>
                   </div>
+                  {renderSectionCustomFields('compensation')}
                 </section>
               )}
 
-              {stepId === 'referral' && (
+              {stepId === 'referral' && isSectionFieldEnabled('referral', 'main') && (
                 <section className="job-step-pane" aria-labelledby="step-referral">
                   <h2 id="step-referral" className="visually-hidden">
                     Employee referrals
@@ -2484,10 +2558,11 @@ export default function JobEditorPage() {
                       </div>
                     </div>
                   )}
+                  {renderSectionCustomFields('referral')}
                 </section>
               )}
 
-              {stepId === 'hiring_team' && (
+              {stepId === 'hiring_team' && isSectionFieldEnabled('hiring_team', 'main') && (
                 <section className="job-step-pane">
                   <div className="job-editor-grid-2">
                     <JobEditorField label="Hiring manager">
@@ -2523,16 +2598,18 @@ export default function JobEditorPage() {
                     Interview panel and rounds are configured in <strong>Interview configuration</strong> after the job
                     exists—plans, kits, and assignments tie to this <code>job_id</code>.
                   </p>
+                  {renderSectionCustomFields('hiring_team')}
                 </section>
               )}
 
-              {stepId === 'pipeline' && hasPostCreateSteps && (
+              {stepId === 'pipeline' && hasPostCreateSteps && isSectionFieldEnabled('pipeline', 'main') && (
                 <section className="job-step-pane">
                   <PipelineStageRulesSection token={token} jobId={numericId!} />
+                  {renderSectionCustomFields('pipeline')}
                 </section>
               )}
 
-              {stepId === 'interview' && hasPostCreateSteps && (
+              {stepId === 'interview' && hasPostCreateSteps && isSectionFieldEnabled('interview', 'main') && (
                 <section className="job-step-pane">
                   <InterviewPanelSection
                     token={token}
@@ -2540,10 +2617,11 @@ export default function JobEditorPage() {
                     interviewDefaults={jobConfig.interview_defaults || {}}
                     setInterviewDefaults={setInterviewDefaults}
                   />
+                  {renderSectionCustomFields('interview')}
                 </section>
               )}
 
-              {stepId === 'evaluation' && hasPostCreateSteps && (
+              {stepId === 'evaluation' && hasPostCreateSteps && isSectionFieldEnabled('evaluation', 'main') && (
                 <section className="job-step-pane">
                   <JobScorecardCriteriaEditor token={token} jobId={numericId!} />
                   <div className="job-editor-card" style={{ marginTop: 16 }}>
@@ -2590,10 +2668,11 @@ export default function JobEditorPage() {
                       Require all rubric fields before scorecard submit
                     </label>
                   </div>
+                  {renderSectionCustomFields('evaluation')}
                 </section>
               )}
 
-              {stepId === 'posting' && hasPostCreateSteps && (
+              {stepId === 'posting' && hasPostCreateSteps && isSectionFieldEnabled('posting', 'main') && (
                 <section className="job-step-pane">
                   <div className="job-editor-card">
                     <h3 className="job-editor-card-title">Visibility</h3>
@@ -2641,10 +2720,11 @@ export default function JobEditorPage() {
                       </label>
                     ))}
                   </div>
+                  {renderSectionCustomFields('posting')}
                 </section>
               )}
 
-              {stepId === 'automation' && (
+              {stepId === 'automation' && isSectionFieldEnabled('automation', 'main') && (
                 <section className="job-step-pane">
                   <div className="job-editor-card">
                     <label className="job-checkbox-label">
@@ -2732,22 +2812,25 @@ export default function JobEditorPage() {
                       />
                     </JobEditorField>
                   </div>
+                  {renderSectionCustomFields('automation')}
                 </section>
               )}
 
-              {stepId === 'analytics' && hasPostCreateSteps && (
+              {stepId === 'analytics' && hasPostCreateSteps && isSectionFieldEnabled('analytics', 'main') && (
                 <section className="job-step-pane">
                   <JobAnalyticsSection token={token} jobId={numericId!} />
+                  {renderSectionCustomFields('analytics')}
                 </section>
               )}
 
-              {stepId === 'attachments' && hasPostCreateSteps && (
+              {stepId === 'attachments' && hasPostCreateSteps && isSectionFieldEnabled('attachments', 'main') && (
                 <section className="job-step-pane">
                   <JobAttachmentsSection token={token} jobId={numericId!} onChanged={() => refreshJob(numericId!)} />
+                  {renderSectionCustomFields('attachments')}
                 </section>
               )}
 
-              {stepId === 'permissions' && (
+              {stepId === 'permissions' && isSectionFieldEnabled('permissions', 'main') && (
                 <section className="job-step-pane">
                   <p className="job-editor-step-lead">
                     Stored in <code>job_config.permissions</code>. Enforcement in API routes can be added per your RBAC
@@ -2790,10 +2873,11 @@ export default function JobEditorPage() {
                     </table>
                     {members.length === 0 && <p className="job-editor-muted">No account members loaded.</p>}
                   </div>
+                  {renderSectionCustomFields('permissions')}
                 </section>
               )}
 
-              {stepId === 'compliance' && (
+              {stepId === 'compliance' && isSectionFieldEnabled('compliance', 'main') && (
                 <section className="job-step-pane">
                   <div className="job-editor-grid-2">
                     <JobEditorField label="Requisition / job ID">
@@ -2835,6 +2919,7 @@ export default function JobEditorPage() {
                       placeholder="Describe approvers and order…"
                     />
                   </JobEditorField>
+                  {renderSectionCustomFields('compliance')}
                 </section>
               )}
             </div>

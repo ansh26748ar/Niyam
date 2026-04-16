@@ -18,6 +18,12 @@ export interface OrganizationSettings {
   departments: OrganizationDepartment[]
   /** ISO 3166-1 alpha-2 codes enabled for job location; null = all countries from catalog. */
   enabled_country_codes: string[] | null
+  /** Enabled setup sections for the job editor wizard. */
+  enabled_job_setup_sections: string[]
+  /** Enabled field blocks by section for the job editor wizard. */
+  enabled_job_setup_fields: Record<string, string[]>
+  /** Catalog loaded from backend YAML for section/field labels. */
+  job_setup_catalog: { id: string; label: string; fields: { id: string; label: string }[] }[]
 }
 
 async function readApiJson(res: Response): Promise<{ success?: boolean; data?: unknown; error?: string }> {
@@ -58,6 +64,8 @@ export interface OrganizationSettingsUpdate {
       | 'timezone'
       | 'departments'
       | 'enabled_country_codes'
+      | 'enabled_job_setup_sections'
+      | 'enabled_job_setup_fields'
     >
   >
 }
