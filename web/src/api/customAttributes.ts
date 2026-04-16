@@ -20,9 +20,16 @@ function authHeaders(token: string) {
   return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
 }
 
-async function req<T>(path: string, token: string, options: RequestInit = {}): Promise<T> {
+async function req<T>(path: string, token: string, accountId?: number | string, options: RequestInit = {}): Promise<T> {
+  const headers: Record<string, string> = {
+    ...authHeaders(token),
+    ...(((options.headers as Record<string, string>) ?? {})),
+  }
+  if (accountId !== undefined && accountId !== null && String(accountId).trim() !== '') {
+    headers['X-Account-Id'] = String(accountId)
+  }
   const res = await fetch(`${BASE}${path}`, {
-    headers: { ...authHeaders(token), ...(options.headers as Record<string, string> ?? {}) },
+    headers,
     ...options,
   })
   const json = await res.json()
@@ -31,11 +38,16 @@ async function req<T>(path: string, token: string, options: RequestInit = {}): P
 }
 
 export const customAttributesApi = {
-  list: (token: string, entityType: CustomAttributeEntityType) =>
-    req<CustomAttributeDefinition[]>(`/custom_attribute_definitions?entity_type=${encodeURIComponent(entityType)}`, token),
+  list: (token: string, entityType: CustomAttributeEntityType, accountId?: number | string) =>
+    req<CustomAttributeDefinition[]>(
+      `/custom_attribute_definitions?entity_type=${encodeURIComponent(entityType)}`,
+      token,
+      accountId,
+    ),
 
   create: (
     token: string,
+    accountId: number | string | undefined,
     body: {
       entity_type: CustomAttributeEntityType
       attribute_key: string
@@ -45,13 +57,23 @@ export const customAttributesApi = {
       required?: boolean
       position?: number
     },
-  ) => req<CustomAttributeDefinition>('/custom_attribute_definitions', token, { method: 'POST', body: JSON.stringify(body) }),
+  ) =>
+    req<CustomAttributeDefinition>('/custom_attribute_definitions', token, accountId, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
 
   patch: (
     token: string,
+    accountId: number | string | undefined,
     id: number,
     body: Partial<Pick<CustomAttributeDefinition, 'label' | 'field_type' | 'options' | 'required' | 'position'>>,
-  ) => req<CustomAttributeDefinition>(`/custom_attribute_definitions/${id}`, token, { method: 'PATCH', body: JSON.stringify(body) }),
+  ) =>
+    req<CustomAttributeDefinition>(`/custom_attribute_definitions/${id}`, token, accountId, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
 
-  delete: (token: string, id: number) => req<{ deleted: boolean }>(`/custom_attribute_definitions/${id}`, token, { method: 'DELETE' }),
+  delete: (token: string, accountId: number | string | undefined, id: number) =>
+    req<{ deleted: boolean }>(`/custom_attribute_definitions/${id}`, token, accountId, { method: 'DELETE' }),
 }

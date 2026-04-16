@@ -25,6 +25,7 @@ import EsignSettingsLayout from './layouts/EsignSettingsLayout'
 import GeneralSettingsLayout from './layouts/GeneralSettingsLayout'
 import AuditComplianceSettingsLayout from './layouts/AuditComplianceSettingsLayout'
 import OrganizationSettingsPage from './pages/settings/OrganizationSettingsPage'
+import JobSetupSectionsSettingsPage from './pages/settings/JobSetupSectionsSettingsPage'
 import DepartmentsSettingsPage from './pages/settings/DepartmentsSettingsPage'
 import JobLocationsSettingsPage from './pages/settings/JobLocationsSettingsPage'
 import WorkspaceSettingsPage from './pages/settings/WorkspaceSettingsPage'
@@ -144,6 +145,7 @@ function AppRoutes() {
               <Route path="general" element={<GeneralSettingsLayout />}>
                 <Route index element={<Navigate to="organization" replace />} />
                 <Route path="organization" element={<OrganizationSettingsPage />} />
+                <Route path="job-setup-flow" element={<JobSetupSectionsSettingsPage />} />
                 <Route path="departments" element={<DepartmentsSettingsPage />} />
                 <Route path="job-locations" element={<JobLocationsSettingsPage />} />
                 <Route path="workspace" element={<WorkspaceSettingsPage />} />

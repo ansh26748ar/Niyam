@@ -1,6 +1,7 @@
 """Workspace organization settings (accounts.name + accounts.settings['organization'])."""
 from __future__ import annotations
 
+import re
 import uuid
 from copy import deepcopy
 from datetime import datetime, timezone
@@ -12,10 +13,17 @@ from sqlalchemy import delete
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.helpers.countries_catalog import valid_country_codes
+from app.helpers.job_setup_flow_catalog import (
+    job_setup_fields_by_section,
+    job_setup_section_ids,
+    load_job_setup_catalog,
+)
 from app.models.account import Account
 from app.models.department import Department
 from app.services.base_service import BaseService
 
+_DEFAULT_ENABLED_JOB_SETUP_SECTIONS = job_setup_section_ids()
+_DEFAULT_ENABLED_JOB_SETUP_FIELDS = job_setup_fields_by_section()
 _DEFAULT_ORGANIZATION: dict[str, Any] = {
     "logo_url": "",
     "careers_page_url": "",
@@ -24,12 +32,16 @@ _DEFAULT_ORGANIZATION: dict[str, Any] = {
     "timezone": "UTC",
     "departments": [],
     "enabled_country_codes": None,
+    "enabled_job_setup_sections": _DEFAULT_ENABLED_JOB_SETUP_SECTIONS,
+    "enabled_job_setup_fields": _DEFAULT_ENABLED_JOB_SETUP_FIELDS,
 }
 
 _ALLOWED_STRING_ORG_KEYS = frozenset(
     {"logo_url", "careers_page_url", "default_language", "default_currency", "timezone"}
 )
 _ALLOW_PATCH_ORG_KEYS = frozenset(_DEFAULT_ORGANIZATION.keys())
+_ALL_JOB_SETUP_SECTIONS = frozenset(_DEFAULT_ENABLED_JOB_SETUP_SECTIONS)
+_CUSTOM_FIELD_TOKEN_RE = re.compile(r"^custom:[a-z0-9_]{2,128}$")
 
 
 def _normalize_departments(raw: Any) -> list[dict[str, str]]:
@@ -66,6 +78,50 @@ def _normalize_enabled_codes(raw: Any) -> list[str] | None:
     return sorted(set(codes))
 
 
+def _normalize_enabled_job_setup_sections(raw: Any) -> list[str]:
+    if not isinstance(raw, list):
+        return list(_DEFAULT_ENABLED_JOB_SETUP_SECTIONS)
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in raw:
+        section_id = str(item).strip()
+        if section_id not in _ALL_JOB_SETUP_SECTIONS:
+            continue
+        if section_id in seen:
+            continue
+        seen.add(section_id)
+        out.append(section_id)
+    if not out:
+        return list(_DEFAULT_ENABLED_JOB_SETUP_SECTIONS)
+    return out
+
+
+def _normalize_enabled_job_setup_fields(raw: Any) -> dict[str, list[str]]:
+    defaults = _DEFAULT_ENABLED_JOB_SETUP_FIELDS
+    if not isinstance(raw, dict):
+        return {sid: list(fids) for sid, fids in defaults.items()}
+
+    out: dict[str, list[str]] = {}
+    for section_id, default_field_ids in defaults.items():
+        current_raw = raw.get(section_id)
+        if not isinstance(current_raw, list):
+            out[section_id] = list(default_field_ids)
+            continue
+        allowed = set(default_field_ids)
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for item in current_raw:
+            field_id = str(item).strip()
+            is_default = field_id in allowed
+            is_custom = bool(_CUSTOM_FIELD_TOKEN_RE.match(field_id))
+            if (not is_default and not is_custom) or field_id in seen:
+                continue
+            seen.add(field_id)
+            normalized.append(field_id)
+        out[section_id] = normalized if normalized else list(default_field_ids)
+    return out
+
+
 def merged_organization_config(account_settings: dict | None) -> dict[str, Any]:
     org = deepcopy(_DEFAULT_ORGANIZATION)
     if isinstance(account_settings, dict) and isinstance(account_settings.get("organization"), dict):
@@ -78,6 +134,12 @@ def merged_organization_config(account_settings: dict | None) -> dict[str, Any]:
                 continue
             if k == "enabled_country_codes":
                 org[k] = _normalize_enabled_codes(v)
+                continue
+            if k == "enabled_job_setup_sections":
+                org[k] = _normalize_enabled_job_setup_sections(v)
+                continue
+            if k == "enabled_job_setup_fields":
+                org[k] = _normalize_enabled_job_setup_fields(v)
                 continue
             if v is None:
                 continue
@@ -126,6 +188,7 @@ class OrganizationSettingsService(BaseService):
                 "name": acc.name,
                 "slug": acc.slug,
                 "plan": acc.plan,
+                "job_setup_catalog": load_job_setup_catalog(),
                 **org,
             }
         )
@@ -162,6 +225,10 @@ class OrganizationSettingsService(BaseService):
                     continue
                 if k == "enabled_country_codes":
                     org[k] = _normalize_enabled_codes(v)
+                elif k == "enabled_job_setup_sections":
+                    org[k] = _normalize_enabled_job_setup_sections(v)
+                elif k == "enabled_job_setup_fields":
+                    org[k] = _normalize_enabled_job_setup_fields(v)
                 elif k in ("logo_url", "careers_page_url"):
                     org[k] = str(v).strip()
                 elif k == "default_language":
@@ -192,6 +259,7 @@ class OrganizationSettingsService(BaseService):
                 "name": acc.name,
                 "slug": acc.slug,
                 "plan": acc.plan,
+                "job_setup_catalog": load_job_setup_catalog(),
                 **org_response,
             }
         )

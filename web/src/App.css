@@ -7977,6 +7977,140 @@ textarea.esign-pro-input {
   background: linear-gradient(135deg, var(--gray-50, #f9fafb) 0%, var(--surface, #fff) 100%);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
+
+.job-setup-flow-page {
+  max-width: 980px;
+}
+.job-setup-flow-hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 18px;
+  padding: 20px 22px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 14px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbfd 100%);
+  box-shadow:
+    0 8px 20px -16px rgba(2, 132, 199, 0.35),
+    0 1px 2px rgba(15, 23, 42, 0.06);
+}
+.job-setup-flow-hero-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary, #0f172a);
+}
+.job-setup-flow-page .job-setup-flow-lead {
+  margin: 8px 0 0;
+  max-width: 720px;
+}
+.job-setup-flow-shell {
+  display: block;
+}
+.job-setup-flow-shell-card {
+  border: 1px solid var(--border-light, #e5e7eb);
+  border-radius: 14px;
+  padding: 18px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+.job-setup-flow-shell-title {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary, #0f172a);
+}
+.job-setup-flow-shell-hint {
+  margin-bottom: 14px;
+}
+.job-setup-sections-list {
+  display: grid;
+  gap: 12px;
+}
+.job-setup-section-card {
+  border: 1px solid var(--border-light, #e5e7eb);
+  border-radius: 12px;
+  padding: 12px;
+  background: #fff;
+}
+.job-setup-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 10px;
+}
+.job-setup-section-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary, #0f172a);
+}
+.job-setup-section-toggle input {
+  accent-color: var(--teal, #00b4d8);
+}
+.job-setup-section-meta {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+.job-setup-section-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid #dbe6ef;
+  background: #f8fbfe;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 600;
+}
+.job-setup-fields-list {
+  margin-top: 10px;
+  margin-left: 28px;
+  display: grid;
+  gap: 7px;
+}
+.job-setup-fields-list.is-disabled {
+  opacity: 0.55;
+}
+.job-setup-field-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: #334155;
+}
+.job-setup-field-row--custom span {
+  color: #0f766e;
+}
+.job-setup-field-row input {
+  accent-color: var(--teal, #00b4d8);
+}
+.job-setup-add-btn {
+  margin-top: 4px;
+  justify-self: start;
+}
+.job-setup-add-panel {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px dashed #bfdbfe;
+  border-radius: 10px;
+  background: #f8fbff;
+}
+.job-setup-add-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
 .settings-workspace-esign-title {
   margin: 0 0 10px;
   font-size: 16px;
