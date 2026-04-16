@@ -126,11 +126,27 @@ export default function JobSetupSectionsSettingsPage() {
         field_type: newFieldType,
       })
       setJobCustomDefs(prev => [...prev, created])
-      toggleField(sectionId, `custom:${created.attribute_key}`, true)
+      const section = catalogSections.find(s => s.id === sectionId)
+      const defaultIds = section?.fields.map(f => f.id) ?? []
+      const currentIds = form.enabled_job_setup_fields?.[sectionId] ?? defaultIds
+      const tokenId = `custom:${created.attribute_key}`
+      const hasToken = currentIds.includes(tokenId)
+      const nextSectionIds = hasToken ? currentIds : [...currentIds, tokenId]
+      const nextEnabledJobSetupFields = {
+        ...form.enabled_job_setup_fields,
+        [sectionId]: nextSectionIds,
+      }
+      const updated = await patchOrganizationSettings(token, accountId, {
+        organization: {
+          enabled_job_setup_sections: form.enabled_job_setup_sections,
+          enabled_job_setup_fields: nextEnabledJobSetupFields,
+        },
+      })
+      setForm(normalize(updated))
       setNewFieldLabel('')
       setNewFieldType('text')
       setAddingForSectionId(null)
-      success('Added', 'Custom field added to section.')
+      success('Added', 'Custom field added and saved to this section.')
     } catch (e) {
       showError('Could not add custom field', e instanceof Error ? e.message : undefined)
     } finally {
