@@ -73,6 +73,8 @@ class Settings(BaseSettings):
     ESIGN_ARTIFACTS_DIR: str = ""
     # Signed packages (HTML + embedded signature). Empty = project storage/esign_signed/
     ESIGN_SIGNED_DOCUMENTS_DIR: str = ""
+    # Job attachment files root. Empty = project storage/job_attachments/
+    JOB_ATTACHMENTS_DIR: str = ""
 
 
 @lru_cache

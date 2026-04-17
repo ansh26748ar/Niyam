@@ -129,6 +129,26 @@ class JobsController(BaseController, Authenticatable):
             return self.render_error(result["error"], status=422)
         return self.render_json(result["data"], status=201)
 
+    async def upload_attachment(self):
+        account_id = self._account_id()
+        job_id = int(self.request.path_params["job_id"])
+        form = await self.request.form()
+        upload = form.get("file")
+        if not upload or not hasattr(upload, "read"):
+            return self.render_error("file is required", status=422)
+        file_bytes = await upload.read()
+        result = JobService(self.db).create_attachment_upload(
+            account_id,
+            job_id,
+            file_bytes=file_bytes,
+            original_filename=getattr(upload, "filename", "") or "document",
+            name=str(form.get("name") or "").strip() or None,
+            doc_type=str(form.get("doc_type") or "").strip() or None,
+        )
+        if not result["ok"]:
+            return self.render_error(result["error"], status=422)
+        return self.render_json(result["data"], status=201)
+
     def destroy_attachment(self):
         account_id = self._account_id()
         job_id = int(self.request.path_params["job_id"])

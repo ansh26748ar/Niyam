@@ -186,6 +186,21 @@ export const jobsApi = {
       body: JSON.stringify(data),
     }),
 
+  uploadAttachment: async (token: string, jobId: number, data: { name: string; file: File; doc_type?: string }) => {
+    const form = new FormData()
+    form.append('name', data.name)
+    form.append('file', data.file)
+    if (data.doc_type?.trim()) form.append('doc_type', data.doc_type.trim())
+    const res = await fetch(`${BASE}/jobs/${jobId}/attachments/upload`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    })
+    const json = await res.json()
+    if (!json.success) throw new Error(json.error || 'Request failed')
+    return json.data as JobAttachment
+  },
+
   deleteAttachment: (token: string, jobId: number, attachmentId: number) =>
     req<{ deleted: boolean }>(`/jobs/${jobId}/attachments/${attachmentId}`, token, { method: 'DELETE' }),
 

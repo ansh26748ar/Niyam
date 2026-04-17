@@ -68,6 +68,16 @@ export default function JobSetupSectionsSettingsPage() {
   const selected = useMemo(() => new Set(form?.enabled_job_setup_sections ?? []), [form?.enabled_job_setup_sections])
 
   const catalogSections = useMemo(() => form?.job_setup_catalog ?? [], [form?.job_setup_catalog])
+  const enabledSectionCount = form?.enabled_job_setup_sections?.length ?? 0
+  const totalSectionCount = catalogSections.length
+  const totalCustomFieldCount = useMemo(
+    () =>
+      Object.values(form?.enabled_job_setup_fields ?? {}).reduce(
+        (sum, ids) => sum + ids.filter(id => id.startsWith('custom:')).length,
+        0,
+      ),
+    [form?.enabled_job_setup_fields],
+  )
 
   function toggleSection(sectionId: string, enabled: boolean) {
     if (!form) return
@@ -178,13 +188,33 @@ export default function JobSetupSectionsSettingsPage() {
   return (
     <div className="settings-org-page job-setup-flow-page">
       <div className="job-setup-flow-hero">
-        <div>
-          <h2 className="job-setup-flow-hero-title">Job Setup Flow</h2>
+        <div className="job-setup-flow-hero-content">
+          <div className="job-setup-flow-hero-title-row">
+            <h2 className="job-setup-flow-hero-title">Job Setup Flow</h2>
+          </div>
           <p className="settings-lead job-setup-flow-lead">
-        Configure which sections are visible in the job setup wizard. Disabled sections are hidden for this workspace.
+            Configure which sections are visible in the job setup wizard. Disabled sections are hidden for this
+            workspace.
           </p>
+          <div className="job-setup-flow-metrics" aria-label="Job setup flow overview">
+            <div className="job-setup-flow-metric-card">
+              <span className="job-setup-flow-metric-label">Visible sections</span>
+              <strong className="job-setup-flow-metric-value">
+                {enabledSectionCount}/{totalSectionCount || 0}
+              </strong>
+            </div>
+            <div className="job-setup-flow-metric-card">
+              <span className="job-setup-flow-metric-label">Custom fields</span>
+              <strong className="job-setup-flow-metric-value">{totalCustomFieldCount}</strong>
+            </div>
+          </div>
         </div>
-        <button type="button" className="btn-primary btn-primary--inline" disabled={saving} onClick={() => void save()}>
+        <button
+          type="button"
+          className="btn-primary btn-primary--inline job-setup-flow-save-btn"
+          disabled={saving}
+          onClick={() => void save()}
+        >
           {saving ? 'Saving…' : 'Save changes'}
         </button>
       </div>
@@ -214,12 +244,14 @@ export default function JobSetupSectionsSettingsPage() {
                     <div key={section.id} className="job-setup-section-card">
                       <div className="job-setup-section-head">
                         <label className="job-setup-section-toggle">
-                        <input
-                          type="checkbox"
-                          checked={sectionEnabled}
-                          onChange={e => toggleSection(section.id, e.target.checked)}
-                        />
-                          <span>{section.label}</span>
+                          <input
+                            type="checkbox"
+                            checked={sectionEnabled}
+                            onChange={e => toggleSection(section.id, e.target.checked)}
+                          />
+                          <span className="job-setup-section-title-wrap">
+                            <span>{section.label}</span>
+                          </span>
                         </label>
                         <div className="job-setup-section-meta">
                           <span className="job-setup-section-pill">
@@ -291,7 +323,7 @@ export default function JobSetupSectionsSettingsPage() {
                             disabled={!sectionEnabled}
                             onClick={() => setAddingForSectionId(section.id)}
                           >
-                            + Add new custom field
+                            + Add custom field
                           </button>
                         )}
                       </div>

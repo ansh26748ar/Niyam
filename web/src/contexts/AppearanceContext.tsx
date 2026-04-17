@@ -25,18 +25,51 @@ export const FONT_PRESET_OPTIONS = [
   { id: 'merriweather', label: 'Merriweather' },
 ] as const
 
-export function applyAppearanceToDocument(cssFamily: string, sizePx: number) {
+function ratioForScalePreset(scalePreset: AppearanceSettings['font_scale_preset']): number {
+  if (scalePreset === 'compact') return 1.2
+  if (scalePreset === 'spacious') return 1.33
+  return 1.25
+}
+
+export function applyAppearanceToDocument(appearance: AppearanceSettings) {
   const root = document.documentElement
-  root.style.setProperty('--font', cssFamily)
-  root.style.setProperty('--font-mono', cssFamily)
-  root.style.setProperty('--app-root-font-size', `${sizePx}px`)
+  root.style.setProperty('--font', appearance.ui_font_family_css || appearance.font_family_css)
+  root.style.setProperty('--font-ui', appearance.ui_font_family_css || appearance.font_family_css)
+  root.style.setProperty('--font-body', appearance.body_font_family_css || appearance.font_family_css)
+  root.style.setProperty('--font-heading', appearance.heading_font_family_css || appearance.font_family_css)
+  root.style.setProperty('--font-content', appearance.content_font_family_css || appearance.font_family_css)
+  root.style.setProperty('--font-mono', appearance.mono_font_family_css || appearance.font_family_css)
+  root.style.setProperty('--app-root-font-size', `${appearance.font_size_px}px`)
+  root.style.setProperty('--app-line-height', String(appearance.line_height))
+  root.style.setProperty('--app-letter-spacing-em', `${appearance.letter_spacing_em}em`)
+  root.style.setProperty('--app-font-scale-ratio', String(ratioForScalePreset(appearance.font_scale_preset)))
+  root.style.setProperty('--app-weight-regular', String(appearance.weight_regular))
+  root.style.setProperty('--app-weight-medium', String(appearance.weight_medium))
+  root.style.setProperty('--app-weight-bold', String(appearance.weight_bold))
+  root.style.setProperty('--app-readable-contrast', appearance.high_contrast_mode ? '1' : '0')
+  root.style.setProperty('--app-readable-mode', appearance.readability_mode ? '1' : '0')
 }
 
 export function clearAppearanceInlineStyles() {
   const root = document.documentElement
-  root.style.removeProperty('--font')
-  root.style.removeProperty('--font-mono')
-  root.style.removeProperty('--app-root-font-size')
+  const vars = [
+    '--font',
+    '--font-ui',
+    '--font-body',
+    '--font-heading',
+    '--font-content',
+    '--font-mono',
+    '--app-root-font-size',
+    '--app-line-height',
+    '--app-letter-spacing-em',
+    '--app-font-scale-ratio',
+    '--app-weight-regular',
+    '--app-weight-medium',
+    '--app-weight-bold',
+    '--app-readable-contrast',
+    '--app-readable-mode',
+  ]
+  for (const name of vars) root.style.removeProperty(name)
 }
 
 type AppearanceContextValue = {
@@ -61,9 +94,9 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
     }
     setLoading(true)
     try {
-      const data = await getAppearanceSettings(token)
+      const data = await getAppearanceSettings(token, user.account.id)
       setAppearance(data)
-      applyAppearanceToDocument(data.font_family_css, data.font_size_px)
+      applyAppearanceToDocument(data)
     } catch {
       clearAppearanceInlineStyles()
       setAppearance(null)

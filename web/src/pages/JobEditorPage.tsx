@@ -1271,6 +1271,9 @@ function JobAttachmentsSection({
   const [name, setName] = useState('')
   const [url, setUrl] = useState('')
   const [docType, setDocType] = useState('')
+  const [file, setFile] = useState<File | null>(null)
+  const [inputMode, setInputMode] = useState<'upload' | 'link'>('upload')
+  const [submitting, setSubmitting] = useState(false)
   const [loading, setLoading] = useState(true)
 
   const load = useCallback(async () => {
@@ -1290,21 +1293,41 @@ function JobAttachmentsSection({
 
   const add = async () => {
     const n = name.trim()
-    const u = url.trim()
-    if (!n || !u) {
-      toast.error('Missing fields', 'Name and URL are required.')
+    if (!n) {
+      toast.error('Missing fields', 'Display name is required.')
       return
     }
+    const u = url.trim()
+    if (inputMode === 'upload' && !file) {
+      toast.error('Missing file', 'Select a file to upload.')
+      return
+    }
+    if (inputMode === 'link' && !u) {
+      toast.error('Missing URL', 'File URL is required.')
+      return
+    }
+    setSubmitting(true)
     try {
-      await jobsApi.createAttachment(token, jobId, { name: n, file_url: u, doc_type: docType || undefined })
+      if (inputMode === 'upload' && file) {
+        await jobsApi.uploadAttachment(token, jobId, {
+          name: n,
+          file,
+          doc_type: docType || undefined,
+        })
+      } else {
+        await jobsApi.createAttachment(token, jobId, { name: n, file_url: u, doc_type: docType || undefined })
+      }
       setName('')
       setUrl('')
       setDocType('')
+      setFile(null)
       toast.success('Attachment added', n)
-      load()
+      await load()
       onChanged()
     } catch (e: unknown) {
       toast.error('Failed', e instanceof Error ? e.message : 'Error')
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -1322,19 +1345,21 @@ function JobAttachmentsSection({
   return (
     <div className="job-step-body">
       <div className="job-editor-card">
-        <h3 className="job-editor-card-title">Linked documents</h3>
+        <h3 className="job-editor-card-title">Documents</h3>
         {loading ? (
           <p className="job-editor-muted">Loading…</p>
         ) : rows.length === 0 ? (
-          <p className="job-editor-muted">No attachments yet.</p>
+          <p className="job-editor-muted">No documents added yet.</p>
         ) : (
-          <ul className="job-attachments-list">
+          <ul className="job-attachments-list job-attachments-list--clean">
             {rows.map(a => (
               <li key={a.id} className="job-attachment-row">
-                <a href={a.file_url} target="_blank" rel="noreferrer">
-                  {a.name}
-                </a>
-                {a.doc_type && <span className="job-editor-muted"> · {a.doc_type}</span>}
+                <div className="job-attachment-main">
+                  <a href={a.file_url} target="_blank" rel="noreferrer" className="job-attachment-link">
+                    {a.name}
+                  </a>
+                  {a.doc_type && <span className="job-attachment-type">{a.doc_type}</span>}
+                </div>
                 <button type="button" className="btn-row-action btn-row-danger" onClick={() => del(a)}>
                   Remove
                 </button>
@@ -1344,13 +1369,40 @@ function JobAttachmentsSection({
         )}
       </div>
       <div className="job-editor-card">
-        <h3 className="job-editor-card-title">Add link</h3>
+        <h3 className="job-editor-card-title">Add document</h3>
+        <div className="job-attachment-mode-toggle" role="tablist" aria-label="Add document mode">
+          <button
+            type="button"
+            className={`job-attachment-mode-btn${inputMode === 'upload' ? ' is-active' : ''}`}
+            onClick={() => setInputMode('upload')}
+          >
+            Upload file
+          </button>
+          <button
+            type="button"
+            className={`job-attachment-mode-btn${inputMode === 'link' ? ' is-active' : ''}`}
+            onClick={() => setInputMode('link')}
+          >
+            Add URL
+          </button>
+        </div>
         <JobEditorField label="Display name">
           <input className="job-editor-input" value={name} onChange={e => setName(e.target.value)} placeholder="JD PDF" />
         </JobEditorField>
-        <JobEditorField label="File URL">
-          <input className="job-editor-input" value={url} onChange={e => setUrl(e.target.value)} placeholder="https://…" />
-        </JobEditorField>
+        {inputMode === 'upload' ? (
+          <JobEditorField label="Upload file">
+            <input
+              className="job-editor-input"
+              type="file"
+              onChange={e => setFile(e.target.files?.[0] ?? null)}
+              aria-label="Upload file"
+            />
+          </JobEditorField>
+        ) : (
+          <JobEditorField label="File URL">
+            <input className="job-editor-input" value={url} onChange={e => setUrl(e.target.value)} placeholder="https://…" />
+          </JobEditorField>
+        )}
         <JobEditorField label="Type (optional)">
           <input
             className="job-editor-input"
@@ -1359,8 +1411,8 @@ function JobAttachmentsSection({
             placeholder="jd_pdf, offer_template…"
           />
         </JobEditorField>
-        <button type="button" className="btn-primary" onClick={add}>
-          Add attachment
+        <button type="button" className="btn-primary" onClick={add} disabled={submitting}>
+          {submitting ? 'Saving…' : 'Add document'}
         </button>
       </div>
     </div>

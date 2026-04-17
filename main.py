@@ -11,11 +11,13 @@ configure_logging(process_name="web")
 
 from contextlib import asynccontextmanager
 import logging
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.exc import SQLAlchemyError
 
 from config.settings import get_settings
@@ -65,6 +67,14 @@ def create_app() -> FastAPI:
     async def health_check() -> dict[str, Any]:
         """Health check endpoint for load balancers and monitoring."""
         return {"status": "ok", "app": settings.APP_NAME}
+
+    attachments_dir = (
+        Path(settings.JOB_ATTACHMENTS_DIR).expanduser().resolve()
+        if settings.JOB_ATTACHMENTS_DIR
+        else Path(__file__).resolve().parent / "storage" / "job_attachments"
+    )
+    attachments_dir.mkdir(parents=True, exist_ok=True)
+    app.mount("/files", StaticFiles(directory=str(attachments_dir)), name="files")
 
     draw_routes(app)
 

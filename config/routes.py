@@ -352,6 +352,11 @@ def draw_routes(app: "FastAPI") -> None:
         methods=["POST"],
     )
     router.add_api_route(
+        "/jobs/{job_id:int}/attachments/upload",
+        _wrap(JobsController, "upload_attachment", lambda c: c.upload_attachment()),
+        methods=["POST"],
+    )
+    router.add_api_route(
         "/jobs/{job_id:int}/attachments/{attachment_id:int}",
         _wrap(JobsController, "destroy_attachment", lambda c: c.destroy_attachment()),
         methods=["DELETE"],
